@@ -23,13 +23,10 @@ def SplitDataset(df_day_1: pd.DataFrame, df_day_2: pd.DataFrame, rs: RandomState
     df_train = df_day_2[df_day_2['Label'] == BENIGN].sample(frac=0.8, random_state=rs).sort_index()
     
     # Para validação, queremos os demais dados benignos e os dados malignos do segundo dia
-    df_val = df_day_2.drop(df_train.index)
-    df_val_ben = df_val[df_val["Label"] == BENIGN].sample(
-        n=min(df_val[df_val["Label"] == BENIGN].__len__(), 11342), random_state=rs
-    )
-    df_val_mal = df_val[df_val["Label"].isin(["Syn", "DrDoS_UDP", "UDP-lag", "DrDoS_MSSQL", "DrDoS_NetBIOS", "DrDoS_LDAP"])]
-    df_val_mal = df_val_mal.sample(
-        frac=1, random_state=rs
+    df_val_mal = df_day_2[df_day_2["Label"].isin(["Syn", "UDP", "UDPLag", "MSSQL", "NetBIOS", "LDAP"])]
+    df_val_ben = df_day_2.drop(df_train.index)
+    df_val_ben = df_val_ben[df_val_ben["Label"] == BENIGN].sample(
+        n=min(df_val_ben[df_val_ben["Label"] == BENIGN].__len__(), 11342), random_state=rs
     )
     df_val = pd.concat([df_val_ben, df_val_mal])
     

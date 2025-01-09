@@ -13,7 +13,7 @@ from numpy.random import RandomState
 def main():
     RANDOM_SEED = 5
     rs = RandomState(RANDOM_SEED)
-    DATASET_FORMAT = "parquet"
+    DATASET_FORMAT = "csv"
     
     
     BENIGN = "BENIGN"
@@ -21,14 +21,24 @@ def main():
         BENIGN = "Benign"
     
     # Nesse caso já está dividido entre treino e teste, isto é, entre o primeiro e o segundo dia
-    df_day_1 = GetDataset(sys.argv[1], rs, DATASET_FORMAT)
+    df_day_1 = GetDataset(sys.argv[1], rs, DATASET_FORMAT, filter=False)
+    # Descartando duplicadas
+    initial_len = df_day_1.shape[0]
+    df_day_1 = df_day_1.drop_duplicates()
+    print(f'Tamanho inicial: {initial_len}, tamanho final {df_day_1.shape[0]} | Descartadas {initial_len - df_day_1.shape[0]} duplicadas')
     print(df_day_1['Label'].value_counts())
     print()
     
-    df_day_2 = GetDataset(sys.argv[2], rs, DATASET_FORMAT)
+    
+    df_day_2 = GetDataset(sys.argv[2], rs, DATASET_FORMAT, filter=False)
+    # Descartando duplicadas
+    initial_len = df_day_2.shape[0]
+    df_day_2 = df_day_2.drop_duplicates()
+    print(f'Tamanho inicial: {initial_len}, tamanho final {df_day_2.shape[0]} | Descartadas {initial_len - df_day_2.shape[0]} duplicadas')
     print(df_day_2['Label'].value_counts())
     print()
     print()
+    
     
     df_train, df_val, df_test = SplitDataset(df_day_1, df_day_2, rs, DATASET_FORMAT)
     print()

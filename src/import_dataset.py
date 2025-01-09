@@ -3,7 +3,7 @@ import numpy as np
 import os
 from numpy.random import RandomState
 
-def GetDataset(path: str, rs: RandomState, dataset_format="csv"):
+def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", filter=True):
     """Lê o dataset inteiro, de um diretório, e insere todas as entradas em um dataframe
 
     Args:
@@ -23,11 +23,14 @@ def GetDataset(path: str, rs: RandomState, dataset_format="csv"):
         if dataset_format == "csv":
             cols = list(pd.read_csv(f'{path}/{file}', nrows=1))
             print(f"Reading file {path}/{file}")
-            df_aux = pd.read_csv(f'{path}/{file}',
-                usecols =[i for i in cols if not i in [
-                'Flow ID', ' Source IP', ' Source Port', ' Destination IP', ' Destination Port', 'SimillarHTTP']],
-                parse_dates=[' Timestamp']
-            )
+            if filter:
+                df_aux = pd.read_csv(f'{path}/{file}',
+                    usecols =[i for i in cols if not i in [
+                    'Flow ID', ' Source IP', ' Source Port', ' Destination IP', ' Destination Port', 'SimillarHTTP']],
+                    parse_dates=[' Timestamp']
+                )
+            else:
+                df_aux = pd.read_csv(f'{path}/{file}')
             if mixed_dtypes := {c: dtype for c in df_aux.columns if (dtype := pd.api.types.infer_dtype(df_aux[c])).startswith("mixed")}:
                 raise TypeError(f"Dataframe has one more mixed dtypes: {mixed_dtypes}")
         elif dataset_format == "parquet":
@@ -36,13 +39,18 @@ def GetDataset(path: str, rs: RandomState, dataset_format="csv"):
         
         # Limitar às entradas benignas e 11342 por tipo, para não utilizar toda a RAM
         df_aux_list = []
-        df_aux_ben = df_aux[df_aux["Label"] == BENIGN]
-        df_aux_list.append(df_aux_ben)
         
-        for kind in ["Syn", "DrDoS_UDP", "UDP-lag", "DrDoS_MSSQL", "DrDoS_NetBIOS", "DrDoS_LDAP", "UDP", "UDPLag", "MSSQL", "NetBIOS", "LDAP", "Portmap"]:
-            df_aux_mal = df_aux[df_aux["Label"] == kind]
-            df_aux_mal = df_aux_mal.sample(n=min(11342, len(df_aux_mal)), random_state=rs)
-            df_aux_list.append(df_aux_mal)
+        if label == "ben" or label == "both":
+            df_aux_ben = df_aux[df_aux["Label"] == BENIGN]
+            df_aux_list.append(df_aux_ben)
+        
+        if label == "mal" or label == "both":
+            for kind in ["Syn", "DrDoS_UDP", "UDP-lag", "DrDoS_MSSQL", "DrDoS_NetBIOS", "DrDoS_LDAP", "UDP", "UDPLag", "MSSQL", "NetBIOS", "LDAP", "Portmap"]:
+                df_aux_mal = df_aux[df_aux["Label"] == kind]
+                if len(df_aux_mal) > 0:
+                    print(f"found kind {kind} in {path}/{file}")
+                df_aux_mal = df_aux_mal.sample(n=min(11342, len(df_aux_mal)), random_state=rs)
+                df_aux_list.append(df_aux_mal)
         
         df_list.append(pd.concat(df_aux_list))
         # except:
