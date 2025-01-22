@@ -22,7 +22,7 @@ def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", f
         #try:
         if dataset_format == "csv":
             cols = list(pd.read_csv(f'{path}/{file}', nrows=1))
-            print(f"Reading file {path}/{file}")
+            # print(f"Reading file {path}/{file}")
             if filter:
                 df_aux = pd.read_csv(f'{path}/{file}',
                     usecols =[i for i in cols if not i in [
@@ -30,7 +30,7 @@ def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", f
                     parse_dates=[' Timestamp']
                 )
             else:
-                df_aux = pd.read_csv(f'{path}/{file}')
+                df_aux = pd.read_csv(f'{path}/{file}', parse_dates=['Timestamp'])
             if mixed_dtypes := {c: dtype for c in df_aux.columns if (dtype := pd.api.types.infer_dtype(df_aux[c])).startswith("mixed")}:
                 raise TypeError(f"Dataframe has one more mixed dtypes: {mixed_dtypes}")
         elif dataset_format == "parquet":
@@ -47,8 +47,8 @@ def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", f
         if label == "mal" or label == "both":
             for kind in ["Syn", "DrDoS_UDP", "UDP-lag", "DrDoS_MSSQL", "DrDoS_NetBIOS", "DrDoS_LDAP", "UDP", "UDPLag", "MSSQL", "NetBIOS", "LDAP", "Portmap"]:
                 df_aux_mal = df_aux[df_aux["Label"] == kind]
-                if len(df_aux_mal) > 0:
-                    print(f"found kind {kind} in {path}/{file}")
+                # if len(df_aux_mal) > 0:
+                #     print(f"found kind {kind} in {path}/{file}")
                 df_aux_mal = df_aux_mal.sample(n=min(11342, len(df_aux_mal)), random_state=rs)
                 df_aux_list.append(df_aux_mal)
         
