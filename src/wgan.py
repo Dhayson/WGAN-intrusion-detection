@@ -1,19 +1,17 @@
-import os
 import numpy as np
 import pandas as pd
-import math
-import sys
-
-import torchvision.transforms as transforms
-from torchvision.utils import save_image
 
 from torch.autograd import Variable
 
 import torch.nn as nn
-import torch.nn.functional as F
 import torch
 
 cuda = True if torch.cuda.is_available() else False
+
+def block_mlp(in_feat, out_feat):
+    layers = [nn.Linear(in_feat, out_feat)]
+    layers.append(nn.ReLU(inplace=True))
+    return layers
 
 class Generator(nn.Module):
     def __init__(self, data_shape, latent_dim):
@@ -22,16 +20,11 @@ class Generator(nn.Module):
         self.latent_dim = latent_dim
         
         # TODO: alterar arquitetura para usar TCN e self attention
-        def block(in_feat, out_feat):
-            layers = [nn.Linear(in_feat, out_feat)]
-            layers.append(nn.LeakyReLU(0.2, inplace=True))
-            return layers
-
         self.model = nn.Sequential(
-            *block(latent_dim, 50),
-            *block(50, 70),
-            *block(70, 50),
-            nn.Linear(50, int(np.prod(data_shape))),
+            *block_mlp(latent_dim, 50),
+            *block_mlp(50, 70),
+            *block_mlp(70, 80),
+            nn.Linear(80, int(np.prod(data_shape))),
             nn.Sigmoid()
         )
 
@@ -45,10 +38,10 @@ class Discriminator(nn.Module):
 
         self.model = nn.Sequential(
             nn.Linear(int(np.prod(data_shape)), 40),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(40, 40),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(40, 1)
+            nn.ReLU(inplace=True),
+            nn.Linear(40, 15),
+            nn.ReLU(inplace=True),
+            nn.Linear(15, 1)
         )
 
     def forward(self, data):
@@ -130,3 +123,12 @@ def Train(df_train: pd.DataFrame, lr, epochs) -> tuple[Generator, Discriminator]
     
     return generator, discriminator
 
+def discriminate(discriminator: Discriminator, df: pd.DataFrame) -> list:
+    Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+    results = []
+    for i, val in df.iterrows():
+        val0= val.to_numpy()
+        val_f = Variable(torch.from_numpy(val0).type(Tensor))
+        result = discriminator(val_f)
+        results.append(result.detach())
+    return results

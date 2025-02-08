@@ -1,11 +1,5 @@
-import src.import_dataset
-import sys
-import numpy as np
 from numpy.random import RandomState
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
 
 
 def SplitDataset(df_day_1: pd.DataFrame, df_day_2: pd.DataFrame, rs: RandomState, dataset_format="csv") -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
