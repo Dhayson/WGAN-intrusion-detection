@@ -22,20 +22,17 @@ class Generator(nn.Module):
         self.latent_dim = latent_dim
         
         # TODO: alterar arquitetura para usar TCN e self attention
-        def block(in_feat, out_feat, normalize=True):
+        def block(in_feat, out_feat):
             layers = [nn.Linear(in_feat, out_feat)]
-            if normalize:
-                layers.append(nn.BatchNorm1d(out_feat, 0.8))
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
         self.model = nn.Sequential(
-            *block(latent_dim, 80, normalize=False),
-            *block(80, 80),
-            *block(80, 80),
-            *block(80, 80),
-            nn.Linear(80, int(np.prod(data_shape))),
-            nn.Tanh()
+            *block(latent_dim, 50),
+            *block(50, 70),
+            *block(70, 50),
+            nn.Linear(50, int(np.prod(data_shape))),
+            nn.Sigmoid()
         )
 
     def forward(self, z):
@@ -47,21 +44,21 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         self.model = nn.Sequential(
-            nn.Linear(int(np.prod(data_shape)), 80),
+            nn.Linear(int(np.prod(data_shape)), 40),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(80, 80),
+            nn.Linear(40, 40),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(80, 1),
+            nn.Linear(40, 1)
         )
 
     def forward(self, data):
         validity = self.model(data)
         return validity
 
-def Train(df_train: pd.DataFrame, lr, epochs):
+def Train(df_train: pd.DataFrame, lr, epochs) -> tuple[Generator, Discriminator]:
     data_shape = df_train.loc[0].shape
-    latent_dim = 80
-    clip_value = 0.01
+    latent_dim = 30
+    clip_value = 2
     n_critic = 3
     print_each_n = 300
     
@@ -74,8 +71,8 @@ def Train(df_train: pd.DataFrame, lr, epochs):
         discriminator.cuda()
         
     # Optimizers
-    optimizer_G = torch.optim.RMSprop(generator.parameters(), lr=lr)
-    optimizer_D = torch.optim.RMSprop(discriminator.parameters(), lr=lr)
+    optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr)
+    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr)
     
     Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
     # ----------
@@ -94,7 +91,7 @@ def Train(df_train: pd.DataFrame, lr, epochs):
             optimizer_D.zero_grad()
 
             # Sample noise as generator input
-            z = Variable(Tensor(np.random.normal(0, 1, (datum.shape[0], latent_dim))))
+            z = Variable(Tensor(np.random.normal(0, 1, (latent_dim,))))
 
             # Generate a batch of images
             fake_data = generator(z).detach()
@@ -130,3 +127,6 @@ def Train(df_train: pd.DataFrame, lr, epochs):
                         % (epoch, epochs, batches_done % len(df_train), len(df_train), loss_D.item(), loss_G.item())
                     )
             batches_done += 1
+    
+    return generator, discriminator
+

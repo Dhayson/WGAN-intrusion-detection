@@ -3,7 +3,7 @@ import numpy as np
 import os
 from numpy.random import RandomState
 
-def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", filter=True):
+def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", filter=True, do_print = True):
     """Lê o dataset inteiro, de um diretório, e insere todas as entradas em um dataframe
 
     Args:
@@ -22,11 +22,19 @@ def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", f
         #try:
         if dataset_format == "csv":
             cols = list(pd.read_csv(f'{path}/{file}', nrows=1))
-            # print(f"Reading file {path}/{file}")
+            if do_print:
+                print(f"Reading {path}/{file}")
             if filter:
                 df_aux = pd.read_csv(f'{path}/{file}',
-                    usecols =[i for i in cols if not i in [
-                    'Flow ID', ' Source IP', ' Source Port', ' Destination IP', ' Destination Port', 'SimillarHTTP']],
+                    usecols =[
+                    ' Label', ' Timestamp', ' Source IP', ' Source Port', ' Destination IP', ' Destination Port', ' Protocol', ' Flow Duration',
+                    ' Total Fwd Packets', ' Total Backward Packets', 'Total Length of Fwd Packets', ' Total Length of Bwd Packets',
+                    ' Fwd Packet Length Max', ' Fwd Packet Length Min', ' Fwd Packet Length Mean', ' Fwd Packet Length Std', 'Bwd Packet Length Max',
+                    ' Bwd Packet Length Min', ' Bwd Packet Length Mean', ' Bwd Packet Length Std', 'Flow Bytes/s', ' Flow Packets/s', 
+                    ' Flow IAT Max', ' Flow IAT Min',' Flow IAT Mean', ' Flow IAT Std', ' Fwd IAT Max', ' Fwd IAT Min', ' Fwd IAT Std',
+                    'Fwd IAT Total', ' Bwd IAT Max', ' Bwd IAT Min', ' Bwd IAT Mean', ' Bwd IAT Std', 'Bwd IAT Total', 'Fwd PSH Flags',
+                    ' Bwd PSH Flags', ' Fwd Header Length', ' Bwd Header Length'
+                    ],
                     parse_dates=[' Timestamp']
                 )
             else:
@@ -40,15 +48,21 @@ def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", f
         # Limitar às entradas benignas e 11342 por tipo, para não utilizar toda a RAM
         df_aux_list = []
         
+        # Dropar na e inf
+        df_aux = df_aux.replace([-np.inf, np.inf], np.nan)
+        df_aux = df_aux.dropna(axis = 0)
+        
         if label == "ben" or label == "both":
             df_aux_ben = df_aux[df_aux["Label"] == BENIGN]
+            if len(df_aux_ben) > 0 and do_print:
+                print(f"found kind {BENIGN} in {path}/{file}")
             df_aux_list.append(df_aux_ben)
         
         if label == "mal" or label == "both":
             for kind in ["Syn", "DrDoS_UDP", "UDP-lag", "DrDoS_MSSQL", "DrDoS_NetBIOS", "DrDoS_LDAP", "UDP", "UDPLag", "MSSQL", "NetBIOS", "LDAP", "Portmap"]:
                 df_aux_mal = df_aux[df_aux["Label"] == kind]
-                # if len(df_aux_mal) > 0:
-                #     print(f"found kind {kind} in {path}/{file}")
+                if len(df_aux_mal) > 0 and do_print:
+                    print(f"found kind {kind} in {path}/{file}")
                 df_aux_mal = df_aux_mal.sample(n=min(11342, len(df_aux_mal)), random_state=rs)
                 df_aux_list.append(df_aux_mal)
         
