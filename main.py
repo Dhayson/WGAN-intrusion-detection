@@ -63,7 +63,6 @@ def main():
     if len(sys.argv) > 3 and sys.argv[3] == "train":
         # Limpar dados
         # Essas colunas geram dados de string ou não normalizáveis
-        # TODO: ver features consideradas importantes no artigo
         df_train = df_train.drop(["Label"], axis=1)
         
         # Essa coluna é importante para a dependência temporal!
