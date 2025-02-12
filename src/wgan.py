@@ -5,6 +5,7 @@ from torch.autograd import Variable
 
 import torch.nn as nn
 import torch
+import src.metrics as metrics
 
 cuda = True if torch.cuda.is_available() else False
 
@@ -21,11 +22,9 @@ class Generator(nn.Module):
         
         # TODO: alterar arquitetura para usar TCN e self attention
         self.model = nn.Sequential(
-            *block_mlp(latent_dim, 50),
-            *block_mlp(50, 70),
-            *block_mlp(70, 80),
-            nn.Linear(80, int(np.prod(data_shape))),
-            nn.Sigmoid()
+            *block_mlp(latent_dim, 80),
+            *block_mlp(80, 80),
+            *block_mlp(80, int(np.prod(data_shape))),
         )
 
     def forward(self, z):
@@ -37,10 +36,9 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         self.model = nn.Sequential(
-            nn.Linear(int(np.prod(data_shape)), 40),
-            nn.ReLU(inplace=True),
-            nn.Linear(40, 15),
-            nn.ReLU(inplace=True),
+            *block_mlp(int(np.prod(data_shape)), 80),
+            *block_mlp(80, 80),
+            *block_mlp(80, 15),
             nn.Linear(15, 1)
         )
 
@@ -48,12 +46,11 @@ class Discriminator(nn.Module):
         validity = self.model(data)
         return validity
 
-def Train(df_train: pd.DataFrame, lr, epochs) -> tuple[Generator, Discriminator]:
+def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
+    clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wd = 1e-2) -> tuple[Generator, Discriminator]:
+    
     data_shape = df_train.loc[0].shape
-    latent_dim = 30
-    clip_value = 2
-    n_critic = 3
-    print_each_n = 300
+    print_each_n = 3000
     
     # Initialize generator and discriminator
     generator = Generator(data_shape, latent_dim)
@@ -64,8 +61,8 @@ def Train(df_train: pd.DataFrame, lr, epochs) -> tuple[Generator, Discriminator]
         discriminator.cuda()
         
     # Optimizers
-    optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr)
-    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr)
+    optimizer_G = optim(generator.parameters(), lr=lrg, weight_decay=wd)
+    optimizer_D = optim(discriminator.parameters(), lr=lrd, weight_decay=wd)
     
     Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
     # ----------
@@ -89,7 +86,9 @@ def Train(df_train: pd.DataFrame, lr, epochs) -> tuple[Generator, Discriminator]
             # Generate a batch of images
             fake_data = generator(z).detach()
             # Adversarial loss
-            loss_D = -torch.mean(discriminator(real_data)) + torch.mean(discriminator(fake_data))
+            loss_D_true = torch.mean(discriminator(real_data))
+            loss_D_fake = torch.mean(discriminator(fake_data))
+            loss_D = -loss_D_true + loss_D_fake
 
             loss_D.backward()
             optimizer_D.step()
@@ -116,10 +115,19 @@ def Train(df_train: pd.DataFrame, lr, epochs) -> tuple[Generator, Discriminator]
                 optimizer_G.step()
                 if i % print_each_n == 0:
                     print(
-                        "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                        % (epoch, epochs, batches_done % len(df_train), len(df_train), loss_D.item(), loss_G.item())
+                        "[Epoch %d/%d] [Batch %d/%d] [D true loss: %f] [D fake loss: %f] [G loss: %f]"
+                        % (epoch+1, epochs, batches_done % len(df_train), len(df_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item())
                     )
+                    # print("fake: ", fake_data)
+                    # print("real: ", real_data)
             batches_done += 1
+        if df_val is not None and y_val is not None:
+            discriminator.eval()
+            preds = discriminate(discriminator, df_val)
+            best_thresh = metrics.best_validation_threshold(y_val, preds)
+            thresh = best_thresh["thresholds"]
+            print("\nValidation accuracy: ", metrics.accuracy(y_val, preds > thresh), "\n")
+            discriminator.train()
     
     return generator, discriminator
 

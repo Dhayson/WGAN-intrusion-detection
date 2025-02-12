@@ -10,6 +10,7 @@ import seaborn as sns
 import os
 from numpy.random import RandomState
 import torch
+import torch_optimizer
 from ipaddress import IPv4Address
 from torch.autograd import Variable
 import random
@@ -43,7 +44,6 @@ def main():
     rs = RandomState(RANDOM_SEED)
     DATASET_FORMAT = "csv"
     
-    
     BENIGN = "BENIGN"
     if DATASET_FORMAT == "parquet":
         BENIGN = "Benign"
@@ -60,57 +60,49 @@ def main():
     df_train, df_val, df_test = SplitDataset(df_day_1, df_day_2, rs, DATASET_FORMAT)
     # DebugTrainValTest(df_train, df_val, df_test, BENIGN)
     
+    # Essa coluna é importante para a dependência temporal!
+    df_train = df_train.sort_values(by = "Timestamp")
+    df_val = df_val.sort_values(by = "Timestamp", ignore_index=True)
+    
+    df_train_label = df_train["Label"]
+    df_val_label = df_val["Label"]
+    
+    # Limpar dados
+    # Essas colunas geram dados de string ou não normalizáveis
+    df_train = df_train.drop(["Label"], axis=1)
+    df_val = df_val.drop(["Label"], axis=1)
+    df_train = df_train.drop(["Timestamp"], axis=1)
+    df_val = df_val.drop(["Timestamp"], axis=1)
+    
+    # Mapeando endereços ip para valores inteiros
+    df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
+    df_val["Source IP"] = df_val["Source IP"].map(lambda x: int(IPv4Address(x)))
+    df_train["Destination IP"] = df_train["Destination IP"].map(lambda x: int(IPv4Address(x)))
+    df_val["Destination IP"] = df_val["Destination IP"].map(lambda x: int(IPv4Address(x)))
+    
+    Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+    
+    train_min = df_train.min().astype("float64")
+    train_max = df_train.max().astype("float64")
+    min_max = (train_max - train_min).to_numpy()
+    
+    # Normalização
+    # TODO: fazer de uma forma que fique salvo para depois
+    df_train = (df_train - df_train.min())/(df_train.max() - df_train.min())
+    df_train = df_train.fillna(0)
+    
+    df_val: pd.DataFrame = (df_val - train_min)/(min_max)
+    df_val = df_val.fillna(0)
+    
+    # Validação: diferenciar entre benignos (0) e ataques (1)
+    y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
+    
     if len(sys.argv) > 3 and sys.argv[3] == "train":
-        # Limpar dados
-        # Essas colunas geram dados de string ou não normalizáveis
-        df_train = df_train.drop(["Label"], axis=1)
-        
-        # Essa coluna é importante para a dependência temporal!
-        df_train = df_train.sort_values(by = "Timestamp")
-        df_train = df_train.drop(["Timestamp"], axis=1)
-        
-        # Mapeando endereços ip para valores inteiros
-        df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
-        df_train["Destination IP"] = df_train["Destination IP"].map(lambda x: int(IPv4Address(x)))
-        
-        # Normalização
-        # TODO: fazer de uma forma que fique salvo para depois
-        df_train = (df_train - df_train.min())/(df_train.max() - df_train.min())
-        df_train = df_train.fillna(0)
-        
-        generator, discriminator = Train(df_train, 0.001, 10)
+        generator, discriminator = Train(df_train, 2e-5, 3e-5, 1, df_val, y_val, wd=2e-2, optim=torch_optimizer.Yogi)
         torch.save(generator, "Generator.torch")
         torch.save(discriminator, "Discriminator.torch")
         
     elif len(sys.argv) > 3 and sys.argv[3] == "val":
-        # Essa coluna é importante para a dependência temporal!
-        df_train = df_train.sort_values(by = "Timestamp")
-        df_val = df_val.sort_values(by = "Timestamp", ignore_index=True)
-        
-        df_train_label = df_train["Label"]
-        df_val_label = df_val["Label"]
-        
-        df_train = df_train.drop(["Label"], axis=1)
-        df_val = df_val.drop(["Label"], axis=1)
-        df_train = df_train.drop(["Timestamp"], axis=1)
-        df_val = df_val.drop(["Timestamp"], axis=1)
-        
-        # Mapeando endereços ip para valores inteiros
-        df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
-        df_val["Source IP"] = df_val["Source IP"].map(lambda x: int(IPv4Address(x)))
-        df_train["Destination IP"] = df_train["Destination IP"].map(lambda x: int(IPv4Address(x)))
-        df_val["Destination IP"] = df_val["Destination IP"].map(lambda x: int(IPv4Address(x)))
-        
-        Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
-        
-        train_min = df_train.min().astype("float64")
-        train_max = df_train.max().astype("float64")
-        min_max = (train_max - train_min).to_numpy()
-        
-        # TODO: fazer de uma forma que fique salvo para depois
-        df_val: pd.DataFrame = (df_val - train_min)/(min_max)
-        df_val = df_val.fillna(0)
-        
         discriminator: Discriminator = torch.load("Discriminator.torch", weights_only = False)
         generator: Generator = torch.load("Generator.torch", weights_only = False)
         discriminator = discriminator.eval()
@@ -133,14 +125,16 @@ def main():
         elif sys.argv[4] == "thresh":
             # Get predicitons of df_val
             preds = discriminate(discriminator, df_val)
-            y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
-            thresh = metrics.best_validation_threshold(y_val, preds)["thresholds"]
-            if sys.argv[5] == "matrix":
+            best_thresh = metrics.best_validation_threshold(y_val, preds)
+            thresh = best_thresh["thresholds"]
+            if len(sys.argv) == 5 or sys.argv[5] == "metrics":
+                print("Validation accuracy: ", metrics.accuracy(y_val, preds > thresh))
+                print("Tpr: ", best_thresh['tpr'])
+                print("Fpr: ", best_thresh['fpr'])
+            elif sys.argv[5] == "matrix":
                 metrics.plot_confusion_matrix(y_val, preds > thresh)
             elif sys.argv[5] == "curve":
                 metrics.plot_roc_curve(y_val, preds)
-            else:
-                pass
     elif len(sys.argv) > 3 and sys.argv[3] == "minmax":
         # Mapeando endereços ip para valores inteiros
         df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))

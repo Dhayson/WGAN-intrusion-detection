@@ -13,6 +13,19 @@ def best_validation_threshold(y_val, val_anomaly_scores):
     df_val_roc = df_val_roc.sort_values('youden-index', ascending=False, ignore_index=True).drop_duplicates('fpr')
     return df_val_roc.loc[0]
 
+def accuracy(y_true, y_pred):
+  tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+  return (tp+tn)/(tp+tn+fp+fn)
+
+def get_overall_metrics(y_true, y_pred):
+  tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+  acc = (tp+tn)/(tp+tn+fp+fn)
+  tpr = tp/(tp+fn)
+  fpr = fp/(fp+tn)
+  precision = tp/(tp+fp)
+  f1 = (2*tpr*precision)/(tpr+precision)
+  return {'acc':acc,'tpr':tpr,'fpr':fpr,'precision':precision,'f1-score':f1}
+
 def plot_confusion_matrix(y_true, y_pred):
   cm = confusion_matrix(y_true, y_pred)
   group_counts = [f'{value:.0f}' for value in confusion_matrix(y_true, y_pred).ravel()]
