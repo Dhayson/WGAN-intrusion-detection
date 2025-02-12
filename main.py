@@ -78,7 +78,7 @@ def main():
         df_train = (df_train - df_train.min())/(df_train.max() - df_train.min())
         df_train = df_train.fillna(0)
         
-        generator, discriminator = Train(df_train, 0.001, 50)
+        generator, discriminator = Train(df_train, 0.001, 10)
         torch.save(generator, "Generator.torch")
         torch.save(discriminator, "Discriminator.torch")
         
@@ -135,7 +135,12 @@ def main():
             preds = discriminate(discriminator, df_val)
             y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
             thresh = metrics.best_validation_threshold(y_val, preds)["thresholds"]
-            metrics.plot_confusion_matrix(y_val, preds > thresh)
+            if sys.argv[5] == "matrix":
+                metrics.plot_confusion_matrix(y_val, preds > thresh)
+            elif sys.argv[5] == "curve":
+                metrics.plot_roc_curve(y_val, preds)
+            else:
+                pass
     elif len(sys.argv) > 3 and sys.argv[3] == "minmax":
         # Mapeando endereços ip para valores inteiros
         df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))

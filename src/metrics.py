@@ -22,3 +22,14 @@ def plot_confusion_matrix(y_true, y_pred):
   sns.heatmap(cm, annot=labels, cmap='Oranges', xticklabels=['Predicted Benign', 'Predicted Malicious'], yticklabels=['Actual Benign', 'Actual Malicious'], fmt='')
   plt.show()
   return
+
+def plot_roc_curve(y_true, y_score, max_fpr=1.0):
+  fpr, tpr, thresholds = roc_curve(y_true, y_score)
+  aucroc = roc_auc_score(y_true, y_score)
+  plt.plot(100*fpr[fpr < max_fpr], 100*tpr[fpr < max_fpr], label=f'ROC Curve (AUC = {aucroc:.4f})')
+  plt.xlim(-2,102)
+  plt.xlabel('FPR (%)')
+  plt.ylabel('TPR (%)')
+  plt.legend()
+  plt.title('ROC Curve and AUCROC')
+  plt.show()
