@@ -54,7 +54,7 @@ class Generator(nn.Module):
         self.fc1 = nn.Sequential(
             *block_mlp(latent_dim, 40, leak=0.1),
         )
-        self.lstm = LSTM(40, 40, 40, 40)
+        self.lstm = LSTM(40, 40)
         self.fc2 = nn.Sequential(
             nn.Linear(40, int(np.prod(data_shape))),
             nn.Sigmoid(),
@@ -74,7 +74,7 @@ class Discriminator(nn.Module):
         self.fc1 = nn.Sequential(
             *block_mlp(int(np.prod(data_shape)), 40, leak=0.1),
         )
-        self.lstm = LSTM(40, 40, 40, 40)
+        self.lstm = LSTM(40, 40)
         self.fc2 = nn.Sequential(
             nn.Linear(1600, 1)
         )
@@ -100,7 +100,6 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
     data_ex = df_train.iloc[0]
     # print(data_ex)
     data_shape = data_ex.shape
-    # print(data_shape)
     print_each_n = 3000
     
     # Initialize generator and discriminator
@@ -139,7 +138,7 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
 
             # Generate a batch of images
             fake_data = generator(z).detach()
-            # print("fake data shape", fake_data.shape)
+            fake_data = fake_data.unsqueeze(0)
             # Adversarial loss
             disc_real = discriminator(real_data)
             disc_fake = discriminator(fake_data)
@@ -167,6 +166,7 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
 
                 # Generate a batch of images
                 gen_data = generator(z)
+                gen_data = gen_data.unsqueeze(0)
                 # Adversarial loss
                 loss_G = -torch.mean(discriminator(gen_data))
 
