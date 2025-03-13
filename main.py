@@ -14,8 +14,9 @@ import torch_optimizer
 from ipaddress import IPv4Address
 from torch.autograd import Variable
 import random
+from src.early_stop import EarlyStopping
 
-# OBS: o dataset grande não cabe no repositório, mas pode ser baixado em http://205.174.165.80/CICDataset/CICDDoS2019/Dataset/CSVs/
+# OBS: o dataset completo não cabe no repositório, mas pode ser baixado em http://205.174.165.80/CICDataset/CICDDoS2019/Dataset/CSVs/
 
 def DescartarDuplicatas(dataset: pd.DataFrame, do_print = False):
     initial_len = dataset.shape[0]
@@ -61,24 +62,30 @@ def main():
     # DebugTrainValTest(df_train, df_val, df_test, BENIGN)
     
     # Essa coluna é importante para a dependência temporal!
-    df_train = df_train.sort_values(by = "Timestamp")
+    df_train = df_train.sort_values(by = "Timestamp", ignore_index=True)
     df_val = df_val.sort_values(by = "Timestamp", ignore_index=True)
+    df_test = df_test.sort_values(by = "Timestamp", ignore_index=True)
     
     df_train_label = df_train["Label"]
     df_val_label = df_val["Label"]
+    df_test_label = df_test["Label"]
     
     # Limpar dados
     # Essas colunas geram dados de string ou não normalizáveis
     df_train = df_train.drop(["Label"], axis=1)
     df_val = df_val.drop(["Label"], axis=1)
+    df_test = df_test.drop(["Label"], axis=1)
     df_train = df_train.drop(["Timestamp"], axis=1)
     df_val = df_val.drop(["Timestamp"], axis=1)
+    df_test = df_test.drop(["Timestamp"], axis=1)
     
     # Mapeando endereços ip para valores inteiros
     df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
     df_val["Source IP"] = df_val["Source IP"].map(lambda x: int(IPv4Address(x)))
+    df_test["Source IP"] = df_test["Source IP"].map(lambda x: int(IPv4Address(x)))
     df_train["Destination IP"] = df_train["Destination IP"].map(lambda x: int(IPv4Address(x)))
     df_val["Destination IP"] = df_val["Destination IP"].map(lambda x: int(IPv4Address(x)))
+    df_test["Destination IP"] = df_test["Destination IP"].map(lambda x: int(IPv4Address(x)))
     
     Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
     
@@ -93,24 +100,37 @@ def main():
     
     df_val: pd.DataFrame = (df_val - train_min)/(min_max)
     df_val = df_val.fillna(0)
+
+    df_test: pd.DataFrame = (df_test - train_min)/(min_max)
+    df_test = df_test.fillna(0)
     
     # Validação: diferenciar entre benignos (0) e ataques (1)
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
+    y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
     if len(sys.argv) > 3 and sys.argv[3] == "train":
-        generator, discriminator = Train(df_train, 2e-5, 3e-5, 1, df_val, y_val, wd=2e-2, optim=torch_optimizer.Yogi)
+        generator, discriminator = Train(df_train, 1e-2, 1e-4, 15, df_val, y_val, wdd=3e-2, wdg=3e-4, optim=torch_optimizer.Yogi,
+            early_stopping=EarlyStopping(6, 0), latent_dim=10)
         torch.save(generator, "Generator.torch")
         torch.save(discriminator, "Discriminator.torch")
         
-    elif len(sys.argv) > 3 and sys.argv[3] == "val":
-        discriminator: Discriminator = torch.load("Discriminator.torch", weights_only = False)
+    elif len(sys.argv) > 3 and (sys.argv[3] == "val" or sys.argv[3] == "test"):
+        if sys.argv[3] == "val":
+            df_x = df_val
+            df_x_label = df_val_label
+            y_x = y_val
+        else:
+            df_x = df_test
+            df_x_label = df_test_label
+            y_x = y_test
+        discriminator: Discriminator = torch.load("checkpoint.pt", weights_only = False)
         generator: Generator = torch.load("Generator.torch", weights_only = False)
         discriminator = discriminator.eval()
         generator = generator.eval()
         if len(sys.argv) == 4 or sys.argv[4] == "look":
-            preds = discriminate(discriminator, df_val)
-            for i, val in df_val.iterrows():
-                label = df_val_label.loc[i]
+            preds = discriminate(discriminator, df_x)
+            for i, val in df_x.iterrows():
+                label = df_x_label.loc[i]
                 result = preds[i]
                 if random.randint(0,1) == -1:
                     # Sample noise as generator input
@@ -124,17 +144,19 @@ def main():
                     # print(val_f_old)
         elif sys.argv[4] == "thresh":
             # Get predicitons of df_val
-            preds = discriminate(discriminator, df_val)
-            best_thresh = metrics.best_validation_threshold(y_val, preds)
+            preds = discriminate(discriminator, df_x)
+            best_thresh = metrics.best_validation_threshold(y_x, preds)
             thresh = best_thresh["thresholds"]
-            if len(sys.argv) == 5 or sys.argv[5] == "metrics":
-                print("Validation accuracy: ", metrics.accuracy(y_val, preds > thresh))
+            if len(sys.argv) == 5 or sys.argv[5] == "metrics" or sys.argv[5] == "both":
+                X = "Validation" if sys.argv[3] == "val" else "Test"
+                print(f"{X} accuracy: ", metrics.accuracy(y_x, preds > thresh))
                 print("Tpr: ", best_thresh['tpr'])
                 print("Fpr: ", best_thresh['fpr'])
-            elif sys.argv[5] == "matrix":
-                metrics.plot_confusion_matrix(y_val, preds > thresh)
-            elif sys.argv[5] == "curve":
-                metrics.plot_roc_curve(y_val, preds)
+            if len(sys.argv) > 5:
+                if sys.argv[5] == "matrix" or sys.argv[5] == "both":
+                    metrics.plot_confusion_matrix(y_x, preds > thresh, name=sys.argv[3])
+                if sys.argv[5] == "curve" or sys.argv[5] == "both":
+                    metrics.plot_roc_curve(y_x, preds, name=sys.argv[3])
     elif len(sys.argv) > 3 and sys.argv[3] == "minmax":
         # Mapeando endereços ip para valores inteiros
         df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
