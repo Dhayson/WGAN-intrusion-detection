@@ -65,7 +65,6 @@ class Generator(nn.Module):
         data = self.fc1(z)
         data = self.lstm(data)
         data = self.fc2(data)
-        data = self.flat(data)
         return data
 
 class Discriminator(nn.Module):
@@ -100,6 +99,7 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
     data_ex = df_train.iloc[0]
     # print(data_ex)
     data_shape = data_ex.shape
+    # print('data_shape', data_shape)
     print_each_n = 3000
     
     # Initialize generator and discriminator
@@ -138,8 +138,10 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
 
             # Generate a batch of images
             fake_data = generator(z).detach()
-            fake_data = fake_data.unsqueeze(0)
+            # fake_data = fake_data.unsqueeze(0)
             # Adversarial loss
+            # print('real_data shape', real_data.shape)
+            # print("fake_data shape", fake_data.shape)
             disc_real = discriminator(real_data)
             disc_fake = discriminator(fake_data)
             # print("disc real", disc_real)
@@ -166,7 +168,7 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
 
                 # Generate a batch of images
                 gen_data = generator(z)
-                gen_data = gen_data.unsqueeze(0)
+                # gen_data = gen_data.unsqueeze(0)
                 # Adversarial loss
                 loss_G = -torch.mean(discriminator(gen_data))
 
