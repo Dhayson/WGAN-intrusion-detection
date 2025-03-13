@@ -6,18 +6,46 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch
 import src.metrics as metrics
+from sklearn.metrics import roc_auc_score
+from src.early_stop import EarlyStopping
+from src.self_attention import SelfAttention
+from src.self_attention import PositionalEncoding
+from torch.nn.functional import pad
 
 from src.lstm import LSTM
 
 cuda = True if torch.cuda.is_available() else False
 
-def block_mlp(in_feat, out_feat):
+class BlockSelfAttention(nn.Module):
+    def __init__(self, input_shape, embed_dim, heads, dropout):
+       super(BlockSelfAttention, self).__init__()
+       self.pos = PositionalEncoding(embed_dim, 0)
+       self.mha = SelfAttention(embed_dim, heads)
+       self.dropout = nn.Dropout(dropout)
+       self.norm = nn.LayerNorm(input_shape)
+
+    def forward(self, x):
+        #print("BLOCK SA")
+        #print(" ", x.shape)
+        x = self.pos(x)
+        #print(" ", x.shape)
+        attention = self.mha(x)
+        #print(" ", attention.shape)
+        drop = self.dropout(attention)
+        z = x + drop
+        #print(" ", z.shape)
+        normalized = self.norm(z)
+        return normalized
+
+
+
+def block_mlp(in_feat, out_feat, leak = 0.0):
     layers = [nn.Linear(in_feat, out_feat)]
-    layers.append(nn.ReLU(inplace=True))
+    layers.append(nn.LeakyReLU(negative_slope=leak, inplace=True))
     return layers
 
 class Generator(nn.Module):
-    def __init__(self, data_shape, latent_dim):
+    def __init__(self, data_shape, latent_dim, dropout=0.2):
         super(Generator, self).__init__()
         self.data_shape = data_shape
         self.latent_dim = latent_dim
@@ -41,7 +69,7 @@ class Generator(nn.Module):
         return data
 
 class Discriminator(nn.Module):
-    def __init__(self, data_shape):
+    def __init__(self, data_shape, dropout=0.2):
         super(Discriminator, self).__init__()
         self.fc1 = nn.Sequential(
             *block_mlp(int(np.prod(data_shape)), 40, leak=0.1),
@@ -51,7 +79,6 @@ class Discriminator(nn.Module):
             nn.Linear(1600, 1)
         )
         self.flat = nn.Flatten(0)
-        
 
     def forward(self, data):
         z1 = self.fc1(data)
@@ -68,22 +95,25 @@ class Discriminator(nn.Module):
         return val
 
 def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
-    clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wd = 1e-2) -> tuple[Generator, Discriminator]:
+    clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2) -> tuple[Generator, Discriminator]:
     
-    data_shape = df_train.loc[0].shape
+    data_ex = df_train.iloc[0]
+    # print(data_ex)
+    data_shape = data_ex.shape
+    # print(data_shape)
     print_each_n = 3000
     
     # Initialize generator and discriminator
-    generator = Generator(data_shape, latent_dim)
-    discriminator = Discriminator(data_shape)
+    generator = Generator(data_shape, latent_dim, dropout)
+    discriminator = Discriminator(data_shape, dropout)
 
     if cuda:
         generator.cuda()
         discriminator.cuda()
         
     # Optimizers
-    optimizer_G = optim(generator.parameters(), lr=lrg, weight_decay=wd)
-    optimizer_D = optim(discriminator.parameters(), lr=lrd, weight_decay=wd)
+    optimizer_G = optim(generator.parameters(), lr=lrg, weight_decay=wdd)
+    optimizer_D = optim(discriminator.parameters(), lr=lrd, weight_decay=wdg)
     
     Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
     # ----------
@@ -93,8 +123,10 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
     batches_done = 0
     for epoch in range(epochs):
         for i, datum in df_train.iterrows():
+            serial = df_train.iloc[max(0, i-39):i+1]
             # Configure input
-            real_data = Variable(torch.from_numpy(datum.to_numpy()).type(Tensor))
+            real_data = Variable(torch.from_numpy(serial.to_numpy()).type(Tensor))
+            # print("real data shape", real_data.shape)
             # ---------------------
             #  Train Discriminator
             # ---------------------
@@ -102,13 +134,19 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
             optimizer_D.zero_grad()
 
             # Sample noise as generator input
-            z = Variable(Tensor(np.random.normal(0, 1, (latent_dim,))))
+            z = Variable(Tensor(np.random.normal(0, 1, (min(40, i+1),latent_dim))))
+            # print("latent shape", z.shape)
 
             # Generate a batch of images
             fake_data = generator(z).detach()
+            # print("fake data shape", fake_data.shape)
             # Adversarial loss
-            loss_D_true = torch.mean(discriminator(real_data))
-            loss_D_fake = torch.mean(discriminator(fake_data))
+            disc_real = discriminator(real_data)
+            disc_fake = discriminator(fake_data)
+            # print("disc real", disc_real)
+            # print("disc fake", disc_fake)
+            loss_D_true = torch.mean(disc_real)
+            loss_D_fake = torch.mean(disc_fake)
             loss_D = -loss_D_true + loss_D_fake
 
             loss_D.backward()
@@ -147,17 +185,33 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
             preds = discriminate(discriminator, df_val)
             best_thresh = metrics.best_validation_threshold(y_val, preds)
             thresh = best_thresh["thresholds"]
-            print("\nValidation accuracy: ", metrics.accuracy(y_val, preds > thresh), "\n")
+            auc_score = roc_auc_score(y_val, preds)
+            print("\nValidation accuracy: ", metrics.accuracy(y_val, preds > thresh))
+            print("AUC score: ", auc_score, "\n")
+            # Mecanismo de early stopping
+            if early_stopping is not None:
+                early_stopping(auc_score, discriminator, generator)
+                if early_stopping.early_stop:
+                    print(f'Stopped by early stopping at epoch {epoch+1}')
+                    discriminator = torch.load('checkpoint.pt', weights_only = False)
+                    generator = torch.load('checkpoint2.pt', weights_only = False)
+                    return generator, discriminator
             discriminator.train()
+        
+
     
+    discriminator = torch.load('checkpoint.pt', weights_only = False)
+    generator = torch.load('checkpoint2.pt', weights_only = False)
     return generator, discriminator
 
 def discriminate(discriminator: Discriminator, df: pd.DataFrame) -> list:
     Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
-    results = []
-    for i, val in df.iterrows():
-        val0= val.to_numpy()
-        val_f = Variable(torch.from_numpy(val0).type(Tensor))
-        result = discriminator(val_f)
-        results.append(result.detach())
-    return results
+    scores = []
+    for i, datum in df.iterrows():
+        serial = df.iloc[max(0, i-39):i+1]
+        data = Variable(torch.from_numpy(serial.to_numpy()).type(Tensor))
+        score = discriminator(data).cpu().detach().numpy()
+        print(f"\r[Validating] [Sample {i} / {len(df)}] [Score {score}]", end="")
+        scores.append(-score)
+    print()
+    return scores
