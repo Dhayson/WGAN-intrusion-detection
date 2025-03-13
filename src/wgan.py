@@ -7,6 +7,8 @@ import torch.nn as nn
 import torch
 import src.metrics as metrics
 
+from src.lstm import LSTM
+
 cuda = True if torch.cuda.is_available() else False
 
 def block_mlp(in_feat, out_feat):
@@ -21,30 +23,49 @@ class Generator(nn.Module):
         self.latent_dim = latent_dim
         
         # TODO: alterar arquitetura para usar TCN e self attention
-        self.model = nn.Sequential(
-            *block_mlp(latent_dim, 80),
-            *block_mlp(80, 80),
-            *block_mlp(80, int(np.prod(data_shape))),
+        self.fc1 = nn.Sequential(
+            *block_mlp(latent_dim, 40, leak=0.1),
         )
+        self.lstm = LSTM(40, 40, 40, 40)
+        self.fc2 = nn.Sequential(
+            nn.Linear(40, int(np.prod(data_shape))),
+            nn.Sigmoid(),
+        )
+        self.flat = nn.Flatten(0)
 
     def forward(self, z):
-        data = self.model(z)
+        data = self.fc1(z)
+        data = self.lstm(data)
+        data = self.fc2(data)
+        data = self.flat(data)
         return data
 
 class Discriminator(nn.Module):
     def __init__(self, data_shape):
         super(Discriminator, self).__init__()
-
-        self.model = nn.Sequential(
-            *block_mlp(int(np.prod(data_shape)), 80),
-            *block_mlp(80, 80),
-            *block_mlp(80, 15),
-            nn.Linear(15, 1)
+        self.fc1 = nn.Sequential(
+            *block_mlp(int(np.prod(data_shape)), 40, leak=0.1),
         )
+        self.lstm = LSTM(40, 40, 40, 40)
+        self.fc2 = nn.Sequential(
+            nn.Linear(1600, 1)
+        )
+        self.flat = nn.Flatten(0)
+        
 
     def forward(self, data):
-        validity = self.model(data)
-        return validity
+        z1 = self.fc1(data)
+        za = self.lstm(z1)
+        
+        za_pad = za
+        if za.shape[0] != 40:
+            target_size = (40, 40)
+            pad_rows = target_size[0] - za.shape[0]
+            za_pad = pad(za_pad, (0, 0, 0, pad_rows), value=0)
+
+        zaf = self.flat(za_pad)
+        val = self.fc2(zaf)
+        return val
 
 def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wd = 1e-2) -> tuple[Generator, Discriminator]:
