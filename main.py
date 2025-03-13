@@ -109,8 +109,7 @@ def main():
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
     if len(sys.argv) > 3 and sys.argv[3] == "train":
-        generator, discriminator = Train(df_train, 1e-2, 1e-4, 15, df_val, y_val, wdd=3e-2, wdg=3e-4, optim=torch_optimizer.Yogi,
-            early_stopping=EarlyStopping(6, 0), latent_dim=10)
+        generator, discriminator = Train(df_train, 1e-2, 1e-4, 15, df_val, y_val, wdd=3e-2, wdg=3e-4, optim=torch_optimizer.Yogi, latent_dim=10)
         torch.save(generator, "Generator.torch")
         torch.save(discriminator, "Discriminator.torch")
         
