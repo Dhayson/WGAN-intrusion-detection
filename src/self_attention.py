@@ -2,9 +2,9 @@ import torch.nn as nn
 import torch
 
 class SelfAttention(nn.Module):
-    def __init__(self, embed_dim, heads):
+    def __init__(self, embed_dim, heads, dropout=0.0):
         super(SelfAttention, self).__init__()
-        self.mha = nn.MultiheadAttention(embed_dim, heads, batch_first=True)
+        self.mha = nn.MultiheadAttention(embed_dim, heads, batch_first=True, dropout=dropout)
 
     def forward(self, x):
         # No MultiheadAttention, Q, K e V são a própria entrada no Self-Attention

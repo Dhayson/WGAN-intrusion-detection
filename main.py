@@ -111,8 +111,8 @@ def main():
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
     if len(sys.argv) > 3 and sys.argv[3] == "train":
-        generator, discriminator = Train(df_train, 1e-2, 4e-3, 50, df_val, y_val, wdd=3e-2, wdg=3e-3, optim=torch_optimizer.Yogi,
-            early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64)
+        generator, discriminator = Train(df_train, 2e-4, 1e-4, 50, df_val, y_val, wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
+            early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64, n_critic=4, time_window=35)
         torch.save(generator, "Generator.torch")
         torch.save(discriminator, "Discriminator.torch")
         
@@ -146,7 +146,7 @@ def main():
                     # print(val_f_old)
         elif sys.argv[4] == "thresh":
             # Get predicitons of df_val
-            preds = discriminate(discriminator, df_x)
+            preds = discriminate(discriminator, df_x, 35)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
             thresh = best_thresh["thresholds"]
             if len(sys.argv) == 5 or sys.argv[5] == "metrics" or sys.argv[5] == "both":

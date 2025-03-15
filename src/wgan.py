@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import pandas as pd
 
@@ -19,12 +20,11 @@ cuda = True if torch.cuda.is_available() else False
 device = "cuda" if cuda else "cpu"
 
 class BlockSelfAttention(nn.Module):
-    def __init__(self, input_shape, embed_dim, heads, dropout):
+    def __init__(self, embed_dim, heads, dropout):
        super(BlockSelfAttention, self).__init__()
        self.pos = PositionalEncoding(embed_dim, 0)
-       self.mha = SelfAttention(embed_dim, heads)
-       self.dropout = nn.Dropout(dropout)
-       self.norm = nn.LayerNorm(input_shape)
+       self.mha = SelfAttention(embed_dim, heads, dropout)
+       self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
         # print("BLOCK SA")
@@ -33,8 +33,7 @@ class BlockSelfAttention(nn.Module):
         # print(" ", x.shape)
         attention = self.mha(x)
         # print(" ", attention.shape)
-        drop = self.dropout(attention)
-        z = x + drop
+        z = x + attention
         # print(" ", z.shape)
         normalized = self.norm(z)
         return normalized
@@ -47,17 +46,17 @@ def block_mlp(in_feat, out_feat, leak = 0.0):
     return layers
 
 class Generator(nn.Module):
-    def __init__(self, data_shape, latent_dim, dropout=0.2):
+    def __init__(self, data_shape, latent_dim, heads, internal_dim, dropout=0.2):
         super(Generator, self).__init__()
         self.data_shape = data_shape
         self.latent_dim = latent_dim
         
         self.fc1 = nn.Sequential(
-            *block_mlp(latent_dim, 40, leak=0.1),
+            *block_mlp(latent_dim, internal_dim, leak=0.1),
         )
-        self.sa = BlockSelfAttention(40, 40, 40, dropout)
+        self.sa = BlockSelfAttention(internal_dim, heads, dropout)
         self.fc2 = nn.Sequential(
-            nn.Linear(40, int(data_shape[1])),
+            nn.Linear(internal_dim, int(data_shape[1])),
             nn.Sigmoid(),
         )
         self.flat = nn.Flatten(0)
@@ -76,17 +75,17 @@ class Generator(nn.Module):
         return data
 
 class Discriminator(nn.Module):
-    def __init__(self, data_shape, dropout=0.2):
+    def __init__(self, data_shape, time_window, heads, internal_dim, dropout=0.2):
         super(Discriminator, self).__init__()
 
         self.fc1 = nn.Sequential(
-            *block_mlp(int(data_shape[1]), 40, leak=0.1),
+            *block_mlp(int(data_shape[1]), internal_dim, leak=0.1),
         )
-        self.sa = BlockSelfAttention(40, 40, 40, dropout)
-        self.fc2 = nn.Sequential(
-            nn.Linear(1600, 1)
-        )
+        self.sa = BlockSelfAttention(internal_dim, heads, dropout)
         self.flat = nn.Flatten(1)
+        self.fc2 = nn.Sequential(
+            nn.Linear(internal_dim*time_window, 1)
+        )
 
     def forward(self, data, do_print=False):
         if do_print:
@@ -109,8 +108,10 @@ class Discriminator(nn.Module):
 
 def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
-    print_each_n = 100, time_window = 40, batch_size=5, do_print = False, step_by_step = False) -> tuple[Generator, Discriminator]:
-    
+    print_each_n = 100, time_window = 40, batch_size=5, do_print = False, step_by_step = False, headsd=40, embedd=400, headsg=40, embedg=400
+    ) -> tuple[Generator, Discriminator]:
+    assert(embedd % headsd == 0)
+    assert(embedg % headsg == 0)
     dataset_train = IntoDataset(df_train, time_window)
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
@@ -120,8 +121,8 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
     # print(data_shape)
     
     # Initialize generator and discriminator
-    generator = Generator(data_shape, latent_dim, dropout)
-    discriminator = Discriminator(data_shape, dropout)
+    generator = Generator(data_shape, latent_dim, headsg, embedd, dropout=dropout)
+    discriminator = Discriminator(data_shape, time_window, headsd, embedg, dropout=dropout)
 
     if cuda:
         print("INFO: Using cuda to train")
@@ -137,7 +138,9 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
 
     batches_done = 0
     i = int(-print_each_n/2)
+    start_all = time.time()
     for epoch in range(epochs):
+        start = time.time()
         for batch in dataloader_train:
             # Configure input
             real_data = batch.to(device)
@@ -203,9 +206,11 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
                     if step_by_step:
                         input()
             batches_done += 1
+        end = time.time()
+        print(f"Epoch training time: {end-start:.3f} seconds")
         if df_val is not None and y_val is not None:
             discriminator.eval()
-            preds = discriminate(discriminator, df_val)
+            preds = discriminate(discriminator, df_val, time_window)
             best_thresh = metrics.best_validation_threshold(y_val, preds)
             thresh = best_thresh["thresholds"]
             auc_score = roc_auc_score(y_val, preds)
@@ -216,13 +221,15 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
                 early_stopping(auc_score, discriminator, generator)
                 if early_stopping.early_stop:
                     print(f'Stopped by early stopping at epoch {epoch+1}')
+                    end_all = time.time()
+                    print(f"Total Training time: {end_all-start_all:.3f} seconds")
                     discriminator = torch.load('checkpoint.pt', weights_only = False)
                     generator = torch.load('checkpoint2.pt', weights_only = False)
                     return generator, discriminator
             discriminator.train()
         
-
-    
+    end_all = time.time()
+    print(f"Total Training time: {end_all-start_all:.3f} seconds")
     discriminator = torch.load('checkpoint.pt', weights_only = False)
     generator = torch.load('checkpoint2.pt', weights_only = False)
     return generator, discriminator
