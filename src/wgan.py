@@ -234,12 +234,14 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
     generator = torch.load('checkpoint2.pt', weights_only = False)
     return generator, discriminator
 
+@torch.no_grad
 def discriminate(discriminator: Discriminator, df: pd.DataFrame, time_window = 40, batch_size=200) -> list: 
     dataset_val = IntoDataset(df, time_window)
     dataloader_val = DataLoader(dataset_val, batch_size, shuffle=False)
     
     scores = []
     i = 0
+    start = time.time()
     for batch in dataloader_val:
         data = batch.to(device)
         # print(data.shape)
@@ -249,5 +251,9 @@ def discriminate(discriminator: Discriminator, df: pd.DataFrame, time_window = 4
         i+=1
         for s in score:
             scores.append(-s)
+    end = time.time()
     print()
+    print(f"Validation time: {end-start}")
+    if batch_size == 1:
+        print(f"Average detection time: {(end-start)/len(df)} seconds")
     return scores

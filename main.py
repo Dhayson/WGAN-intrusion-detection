@@ -112,7 +112,8 @@ def main():
     
     if len(sys.argv) > 3 and sys.argv[3] == "train":
         generator, discriminator = Train(df_train, 2e-4, 1e-4, 50, df_val, y_val, wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
-            early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64, n_critic=4, time_window=35)
+            early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64, n_critic=4, time_window=80,
+            headsd=80, embedd=240, headsg=80, embedg=240)
         torch.save(generator, "Generator.torch")
         torch.save(discriminator, "Discriminator.torch")
         
@@ -130,7 +131,7 @@ def main():
         discriminator = discriminator.eval()
         generator = generator.eval()
         if len(sys.argv) == 4 or sys.argv[4] == "look":
-            preds = discriminate(discriminator, df_x)
+            preds = discriminate(discriminator, df_x, 400)
             for i, val in df_x.iterrows():
                 label = df_x_label.loc[i]
                 result = preds[i]
@@ -146,12 +147,19 @@ def main():
                     # print(val_f_old)
         elif sys.argv[4] == "thresh":
             # Get predicitons of df_val
-            preds = discriminate(discriminator, df_x, 35)
+            if False:
+                preds = discriminate(discriminator, df_x, 35, 1)
+            else:
+                preds = discriminate(discriminator, df_x, 80)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
             thresh = best_thresh["thresholds"]
             if len(sys.argv) == 5 or sys.argv[5] == "metrics" or sys.argv[5] == "both":
                 X = "Validation" if sys.argv[3] == "val" else "Test"
+                print(f"{X} AUC: ", metrics.roc_auc_score(y_x, preds > thresh))
                 print(f"{X} accuracy: ", metrics.accuracy(y_x, preds > thresh))
+                print(f"{X} precision: ", metrics.precision_score(y_x, preds > thresh))
+                print(f"{X} recall: ", metrics.recall_score(y_x, preds > thresh))
+                print(f"{X} f1: ", metrics.f1_score(y_x, preds > thresh))
                 print("Tpr: ", best_thresh['tpr'])
                 print("Fpr: ", best_thresh['fpr'])
             if len(sys.argv) > 5:
