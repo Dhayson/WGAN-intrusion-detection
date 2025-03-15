@@ -87,7 +87,9 @@ def main():
     df_val["Destination IP"] = df_val["Destination IP"].map(lambda x: int(IPv4Address(x)))
     df_test["Destination IP"] = df_test["Destination IP"].map(lambda x: int(IPv4Address(x)))
     
-    Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+    
+    cuda = True if torch.cuda.is_available() else False
+    device = "cuda" if cuda else "cpu"
     
     train_min = df_train.min().astype("float64")
     train_max = df_train.max().astype("float64")
@@ -109,8 +111,8 @@ def main():
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
     if len(sys.argv) > 3 and sys.argv[3] == "train":
-        generator, discriminator = Train(df_train, 1e-2, 1e-4, 15, df_val, y_val, wdd=3e-2, wdg=3e-4, optim=torch_optimizer.Yogi,
-            early_stopping=EarlyStopping(6, 0), latent_dim=10)
+        generator, discriminator = Train(df_train, 1e-2, 4e-3, 50, df_val, y_val, wdd=3e-2, wdg=3e-3, optim=torch_optimizer.Yogi,
+            early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64)
         torch.save(generator, "Generator.torch")
         torch.save(discriminator, "Discriminator.torch")
         
@@ -123,8 +125,8 @@ def main():
             df_x = df_test
             df_x_label = df_test_label
             y_x = y_test
-        discriminator: Discriminator = torch.load("checkpoint.pt", weights_only = False)
-        generator: Generator = torch.load("Generator.torch", weights_only = False)
+        discriminator: Discriminator = torch.load("Discriminator.torch", weights_only = False).to(device)
+        generator: Generator = torch.load("Generator.torch", weights_only = False).to(device)
         discriminator = discriminator.eval()
         generator = generator.eval()
         if len(sys.argv) == 4 or sys.argv[4] == "look":
@@ -134,7 +136,7 @@ def main():
                 result = preds[i]
                 if random.randint(0,1) == -1:
                     # Sample noise as generator input
-                    z = Variable(Tensor(np.random.normal(0, 1, (30,))))
+                    z = torch.tensor(np.random.normal(0, 1, (30,)))
                     gen = generator(z).detach()
                     result_fake = discriminator(gen)
                     print("FAKE", result_fake.item())

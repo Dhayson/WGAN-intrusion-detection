@@ -7,12 +7,16 @@ import torch.nn as nn
 import torch
 import src.metrics as metrics
 from sklearn.metrics import roc_auc_score
+
 from src.early_stop import EarlyStopping
 from src.self_attention import SelfAttention
 from src.self_attention import PositionalEncoding
-from torch.nn.functional import pad
+from src.into_dataloader import IntoDataset
+
+from torch.utils.data import DataLoader
 
 cuda = True if torch.cuda.is_available() else False
+device = "cuda" if cuda else "cpu"
 
 class BlockSelfAttention(nn.Module):
     def __init__(self, input_shape, embed_dim, heads, dropout):
@@ -23,15 +27,15 @@ class BlockSelfAttention(nn.Module):
        self.norm = nn.LayerNorm(input_shape)
 
     def forward(self, x):
-        #print("BLOCK SA")
-        #print(" ", x.shape)
+        # print("BLOCK SA")
+        # print(" ", x.shape)
         x = self.pos(x)
-        #print(" ", x.shape)
+        # print(" ", x.shape)
         attention = self.mha(x)
-        #print(" ", attention.shape)
+        # print(" ", attention.shape)
         drop = self.dropout(attention)
         z = x + drop
-        #print(" ", z.shape)
+        # print(" ", z.shape)
         normalized = self.norm(z)
         return normalized
 
@@ -53,22 +57,22 @@ class Generator(nn.Module):
         )
         self.sa = BlockSelfAttention(40, 40, 40, dropout)
         self.fc2 = nn.Sequential(
-            nn.Linear(40, int(np.prod(data_shape))),
+            nn.Linear(40, int(data_shape[1])),
             nn.Sigmoid(),
         )
         self.flat = nn.Flatten(0)
 
     def forward(self, z):
-        #print("GENERATOR")
-        #print(z.shape)
+        # print("GENERATOR")
+        # print(z.shape)
         z1 = self.fc1(z)
-        #print(z1.shape)
+        # print(z1.shape)
         za = self.sa(z1)
-        #print(za.shape)
+        # print(za.shape)
         # zaf = self.flat(za)
         data = self.fc2(za)
-        #print(data.shape)
-        #print()
+        # print(data.shape)
+        # print()
         return data
 
 class Discriminator(nn.Module):
@@ -76,67 +80,69 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         self.fc1 = nn.Sequential(
-            *block_mlp(int(np.prod(data_shape)), 40, leak=0.1),
+            *block_mlp(int(data_shape[1]), 40, leak=0.1),
         )
         self.sa = BlockSelfAttention(40, 40, 40, dropout)
         self.fc2 = nn.Sequential(
             nn.Linear(1600, 1)
         )
-        self.flat = nn.Flatten(0)
+        self.flat = nn.Flatten(1)
 
-    def forward(self, data):
-        #print("DISCRIMINATOR")
-        #print(data.shape)
+    def forward(self, data, do_print=False):
+        if do_print:
+            print("DISCRIMINATOR")
+            print(data.shape)
         z1 = self.fc1(data)
-        #print(z1.shape)
+        if do_print:
+            print(z1.shape)
         za = self.sa(z1)
-        #print(za.shape)
-        za_pad = za
-        if za.shape[0] != 40:
-            # Realiza padding nos primeiros pacotes
-            target_size = (40, 40)
-            pad_rows = target_size[0] - za.shape[0]
-            za_pad = pad(za_pad, (0, 0, 0, pad_rows), value=0)
-
-        zaf = self.flat(za_pad)
+        if do_print:
+            print(za.shape)
+        zaf = self.flat(za)
+        if do_print:
+            print(zaf.shape)
         val = self.fc2(zaf)
-        #print(val.shape)
-        #print()
+        if do_print:
+            print(val.shape)
+            print()
         return val
 
 def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
-    clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2) -> tuple[Generator, Discriminator]:
+    clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
+    print_each_n = 100, time_window = 40, batch_size=5, do_print = False, step_by_step = False) -> tuple[Generator, Discriminator]:
     
-    data_ex = df_train.iloc[0]
+    dataset_train = IntoDataset(df_train, time_window)
+    dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
+    
+    data_ex = dataset_train[0]
     # print(data_ex)
     data_shape = data_ex.shape
     # print(data_shape)
-    print_each_n = 3000
     
     # Initialize generator and discriminator
     generator = Generator(data_shape, latent_dim, dropout)
     discriminator = Discriminator(data_shape, dropout)
 
     if cuda:
+        print("INFO: Using cuda to train")
         generator.cuda()
         discriminator.cuda()
         
     # Optimizers
     optimizer_G = optim(generator.parameters(), lr=lrg, weight_decay=wdd)
     optimizer_D = optim(discriminator.parameters(), lr=lrd, weight_decay=wdg)
-    
-    Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
     # ----------
     #  Training
     # ----------
 
     batches_done = 0
+    i = int(-print_each_n/2)
     for epoch in range(epochs):
-        for i, datum in df_train.iterrows():
-            serial = df_train.iloc[max(0, i-39):i+1]
+        for batch in dataloader_train:
             # Configure input
-            real_data = Variable(torch.from_numpy(serial.to_numpy()).type(Tensor))
-            # print("real data shape", real_data.shape)
+            real_data = batch.to(device)
+            if do_print:
+                print("real data shape", real_data.shape)
             # ---------------------
             #  Train Discriminator
             # ---------------------
@@ -144,17 +150,19 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
             optimizer_D.zero_grad()
 
             # Sample noise as generator input
-            z = Variable(Tensor(np.random.normal(0, 1, (min(40, i+1),latent_dim))))
+            z = torch.tensor(np.random.normal(0, 1, (batch_size, time_window, latent_dim)), device=device, dtype=torch.float32)
             # print("latent shape", z.shape)
 
             # Generate a batch of images
             fake_data = generator(z).detach()
-            # print("fake data shape", fake_data.shape)
+            if do_print:
+                print("fake data shape", fake_data.shape)
             # Adversarial loss
             disc_real = discriminator(real_data)
             disc_fake = discriminator(fake_data)
-            # print("disc real", disc_real)
-            # print("disc fake", disc_fake)
+            if do_print:
+                print("disc real", disc_real)
+                print("disc fake", disc_fake)
             loss_D_true = torch.mean(disc_real)
             loss_D_fake = torch.mean(disc_fake)
             loss_D = -loss_D_true + loss_D_fake
@@ -167,6 +175,7 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
                 p.data.clamp_(-clip_value, clip_value)
 
             # Train the generator every n_critic iterations
+            i += 1
             if i % n_critic == 0:
 
                 # -----------------
@@ -185,10 +194,14 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
                 if i % print_each_n == 0:
                     print(
                         "[Epoch %d/%d] [Batch %d/%d] [D true loss: %f] [D fake loss: %f] [G loss: %f]"
-                        % (epoch+1, epochs, batches_done % len(df_train), len(df_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item())
+                        % (epoch+1, epochs, batches_done % len(dataloader_train), len(dataloader_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item())
                     )
-                    # print("fake: ", fake_data)
-                    # print("real: ", real_data)
+                    if do_print and False:
+                        print("fake: ", fake_data)
+                        print("real: ", real_data)
+                        print()
+                    if step_by_step:
+                        input()
             batches_done += 1
         if df_val is not None and y_val is not None:
             discriminator.eval()
@@ -214,14 +227,20 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
     generator = torch.load('checkpoint2.pt', weights_only = False)
     return generator, discriminator
 
-def discriminate(discriminator: Discriminator, df: pd.DataFrame) -> list:
-    Tensor: type[torch.FloatTensor] = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+def discriminate(discriminator: Discriminator, df: pd.DataFrame, time_window = 40, batch_size=200) -> list: 
+    dataset_val = IntoDataset(df, time_window)
+    dataloader_val = DataLoader(dataset_val, batch_size, shuffle=False)
+    
     scores = []
-    for i, datum in df.iterrows():
-        serial = df.iloc[max(0, i-39):i+1]
-        data = Variable(torch.from_numpy(serial.to_numpy()).type(Tensor))
-        score = discriminator(data).cpu().detach().numpy()
-        print(f"\r[Validating] [Sample {i} / {len(df)}] [Score {score}]", end="")
-        scores.append(-score)
+    i = 0
+    for batch in dataloader_val:
+        data = batch.to(device)
+        # print(data.shape)
+        score = discriminator(data, do_print=False).cpu().detach().numpy()
+        if i%100 == 0:
+            print(f"\r[Validating] [Sample {i} / {len(dataloader_val)}] [Score {score[0]}]", end="")
+        i+=1
+        for s in score:
+            scores.append(-s)
     print()
     return scores
