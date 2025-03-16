@@ -54,7 +54,7 @@ class Generator(nn.Module):
         self.fc1 = nn.Sequential(
             *block_mlp(latent_dim, 40, leak=0.1),
         )
-        self.lstm = LSTM(40, 40)
+        self.lstm = LSTM(40, 40, dropout)
         self.fc2 = nn.Sequential(
             nn.Linear(40, int(np.prod(data_shape))),
             nn.Sigmoid(),
@@ -73,7 +73,7 @@ class Discriminator(nn.Module):
         self.fc1 = nn.Sequential(
             *block_mlp(int(np.prod(data_shape)), 40, leak=0.1),
         )
-        self.lstm = LSTM(40, 40)
+        self.lstm = LSTM(40, 40, dropout)
         self.fc2 = nn.Sequential(
             nn.Linear(1600, 1)
         )
