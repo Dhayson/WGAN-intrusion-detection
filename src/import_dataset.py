@@ -30,9 +30,9 @@ def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", f
                     ' Label', ' Timestamp', ' Source IP', ' Source Port', ' Destination IP', ' Destination Port', ' Protocol', ' Flow Duration',
                     ' Total Fwd Packets', ' Total Backward Packets', 'Total Length of Fwd Packets', ' Total Length of Bwd Packets',
                     ' Fwd Packet Length Max', ' Fwd Packet Length Min', ' Fwd Packet Length Mean', ' Fwd Packet Length Std', 'Bwd Packet Length Max',
-                    ' Bwd Packet Length Min', ' Bwd Packet Length Mean', ' Bwd Packet Length Std', 'Flow Bytes/s', ' Flow Packets/s', 
+                    ' Bwd Packet Length Min', ' Bwd Packet Length Mean', ' Bwd Packet Length Std', 'Flow Bytes/s', ' Flow Packets/s', 'Fwd Packets/s', ' Bwd Packets/s',
                     ' Flow IAT Max', ' Flow IAT Min',' Flow IAT Mean', ' Flow IAT Std', ' Fwd IAT Max', ' Fwd IAT Min', ' Fwd IAT Std',
-                    'Fwd IAT Total', ' Bwd IAT Max', ' Bwd IAT Min', ' Bwd IAT Mean', ' Bwd IAT Std', 'Bwd IAT Total', 'Fwd PSH Flags',
+                    'Fwd IAT Total', ' Fwd IAT Mean', ' Bwd IAT Max', ' Bwd IAT Min', ' Bwd IAT Mean', ' Bwd IAT Std', 'Bwd IAT Total', 'Fwd PSH Flags',
                     ' Bwd PSH Flags', ' Fwd Header Length', ' Bwd Header Length'
                     ],
                     parse_dates=[' Timestamp']
