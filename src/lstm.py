@@ -7,8 +7,8 @@ class LSTM(nn.Module):
             input_size=input_dim,
             hidden_size=hidden_dim,
             dropout=dropout,
-            num_layers=100,
-            batch_first=True
+            num_layers=50,
+            batch_first=False
         )
     
     def forward(self, x):

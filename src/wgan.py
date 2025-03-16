@@ -75,21 +75,16 @@ class Discriminator(nn.Module):
         )
         self.lstm = LSTM(40, 40, dropout)
         self.fc2 = nn.Sequential(
-            nn.Linear(1600, 1)
+            nn.Linear(40, 1),
+            nn.Sigmoid(),
         )
         self.flat = nn.Flatten(0)
 
     def forward(self, data):
         z1 = self.fc1(data)
         za = self.lstm(z1)
-        
-        za_pad = za
-        if za.shape[0] != 40:
-            target_size = (40, 40)
-            pad_rows = target_size[0] - za.shape[0]
-            za_pad = pad(za_pad, (0, 0, 0, pad_rows), value=0)
-
-        zaf = self.flat(za_pad)
+        zaf = za[-1]
+        zaf = self.flat(zaf)
         val = self.fc2(zaf)
         return val
 
