@@ -2,9 +2,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.metrics import silhouette_score
-from sklearn.metrics import roc_curve, roc_auc_score
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import roc_curve, roc_auc_score, confusion_matrix, precision_score, recall_score, f1_score
 
 def best_validation_threshold(y_val, val_anomaly_scores):
     fpr, tpr, thresholds = roc_curve(y_val, val_anomaly_scores)
