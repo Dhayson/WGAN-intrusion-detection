@@ -7,7 +7,7 @@ class LSTM(nn.Module):
             input_size=input_dim,
             hidden_size=hidden_dim,
             dropout=dropout,
-            num_layers=50,
+            num_layers=3,
             batch_first=False
         )
     

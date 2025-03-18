@@ -78,7 +78,7 @@ class Discriminator(nn.Module):
         )
         self.lstm = LSTM(internal_dim, internal_dim, dropout)   
         self.fc2 = nn.Sequential(
-            nn.Linear(internal_dim*time_window, 1),
+            nn.Linear(internal_dim, 1),
             nn.Sigmoid(),
         )
 
@@ -90,13 +90,9 @@ class Discriminator(nn.Module):
         if do_print:
             print(z1.shape)
         za = self.lstm(z1)
-        za = za.reshape(za.shape[0], -1)
         if do_print:
             print(za.shape)
-        zaf = self.flat(za)
-        if do_print:
-            print(zaf.shape)
-        val = self.fc2(zaf)
+        val = self.fc2(za)
         if do_print:
             print(val.shape)
             print()
@@ -210,6 +206,8 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
         if df_val is not None and y_val is not None:
             discriminator.eval()
             preds = discriminate(discriminator, df_val, time_window)
+            preds = np.mean(preds, axis=1)
+            preds = np.squeeze(preds)
             best_thresh = metrics.best_validation_threshold(y_val, preds)
             thresh = best_thresh["thresholds"]
             auc_score = roc_auc_score(y_val, preds)
