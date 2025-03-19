@@ -25,7 +25,7 @@ class Discriminator(nn.Module):
 
 def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: Discriminator, lrd, lrg, epochs, dataset_val: IntoDataset = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
-    print_each_n = 20, time_window = 40, batch_size=5, do_print = False, step_by_step = False) -> tuple[Generator, Discriminator]:
+    print_each_n = 20, time_window = 40, batch_size=5, do_print = False, step_by_step = False, return_auc = False) -> tuple[Generator, Discriminator]:
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
     data_ex = dataset_train[0]
@@ -136,14 +136,20 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
                     print(f"Total Training time: {end_all-start_all:.3f} seconds")
                     discriminator = torch.load('checkpoint.pt', weights_only = False)
                     generator = torch.load('checkpoint2.pt', weights_only = False)
-                    return generator, discriminator
+                    if return_auc:
+                        return generator, discriminator, auc_score
+                    else:
+                        return generator, discriminator
             discriminator.train()
         
     end_all = time.time()
     print(f"Total Training time: {end_all-start_all:.3f} seconds")
     discriminator = torch.load('checkpoint.pt', weights_only = False)
     generator = torch.load('checkpoint2.pt', weights_only = False)
-    return generator, discriminator
+    if return_auc:
+        return generator, discriminator, auc_score
+    else:
+        return generator, discriminator
 
 @torch.no_grad
 def discriminate(discriminator: Discriminator, dataset_val: IntoDataset, time_window = 40, batch_size=400) -> list: 

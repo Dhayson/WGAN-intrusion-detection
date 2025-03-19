@@ -1,7 +1,8 @@
 from src.import_dataset import GetDataset
 from src.dataset_split import SplitDataset
 from src.wgan.linear_wgan import TrainLinear
-from src.wgan.self_attention_wgan import TrainSelfAttention
+from src.wgan.self_attention_wgan import TrainSelfAttention, RunModelSelfAttention
+from src.tuning import TuneSA
 from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 import src.metrics as metrics
 import sys
@@ -17,6 +18,7 @@ from ipaddress import IPv4Address
 from torch.autograd import Variable
 import random
 from src.early_stop import EarlyStopping
+from src.into_dataloader import IntoDataset, IntoDatasetNoTime
 
 # OBS: o dataset completo não cabe no repositório, mas pode ser baixado em http://205.174.165.80/CICDataset/CICDDoS2019/Dataset/CSVs/
 
@@ -117,18 +119,23 @@ def main():
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
+    time_window = 40
+    dataset_train = IntoDataset(df_train, time_window)
+    dataset_val = IntoDataset(df_val, time_window)
+    dataset_test = IntoDataset(df_test, time_window)
     if len(sys.argv) > 3 and sys.argv[3] == "train":
         if sys.argv[4] == "linear":
+            dataset_train = IntoDatasetNoTime(df_train, time_window)
+            dataset_val = IntoDatasetNoTime(df_val, time_window)
             generator, discriminator = TrainLinear(df_train, 2e-5, 3e-5, 10, df_val, y_val,
                 n_critic=3, optim=torch_optimizer.Yogi, wdd=2e-2, wdg=2e-2, early_stopping=EarlyStopping(3, 0), batch_size=100)
             torch.save(generator, "GeneratorLinear.torch")
             torch.save(discriminator, "DiscriminatorLinear.torch")
         elif sys.argv[4] == "sa":
-            generator_sa, discriminator_sa = TrainSelfAttention(df_train, 5e-5, 5e-5, 10, df_val, y_val, wdd=6e-4, wdg=9e-4, clip_value = 0.9, optim=torch_optimizer.Yogi,
-                early_stopping=EarlyStopping(3, 0), latent_dim=10, batch_size=128, n_critic=5, time_window=40,
-                headsd=40, embedd=240, headsg=40, embedg=240)
-            torch.save(generator_sa, "Generator.torch")
-            torch.save(discriminator_sa, "Discriminator.torch")
+            RunModelSelfAttention(dataset_train, dataset_val, y_val)
+    elif len(sys.argv) > 3 and sys.argv[3] == "tune":
+        if sys.argv[4] == "sa":
+            TuneSA(df_train, df_val, y_val)
     elif len(sys.argv) > 3 and (sys.argv[3] == "val" or sys.argv[3] == "test"):
         if sys.argv[3] == "val":
             df_x = df_val

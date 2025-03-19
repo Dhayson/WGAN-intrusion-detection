@@ -2,6 +2,7 @@ import pandas as pd
 
 import torch.nn as nn
 import torch
+import torch_optimizer
 
 from src.early_stop import EarlyStopping
 from src.self_attention import SelfAttention
@@ -102,18 +103,23 @@ class DiscriminatorSA(Discriminator):
             print()
         return val
     
-def TrainSelfAttention(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
+def TrainSelfAttention(dataset_train: IntoDataset, lrd, lrg, epochs, dataset_val: IntoDataset = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
-    print_each_n = 20, time_window = 40, batch_size=5, headsd=40, embedd=400, headsg=40, embedg=400, data_len=40
+    print_each_n = 20, time_window = 40, batch_size=5, headsd=40, embedd=400, headsg=40, embedg=400, data_len=40, return_auc = False
     ) -> tuple[GeneratorSA, DiscriminatorSA]:
     assert(embedd % headsd == 0)
     assert(embedg % headsg == 0)
     data_shape = (time_window, data_len)
     # Initialize generator and discriminator
-    generator = GeneratorSA(data_shape, latent_dim, headsg, embedd, dropout=dropout, seq_dim=time_window)
-    discriminator = DiscriminatorSA(data_shape, time_window, headsd, embedg, dropout=dropout, seq_dim=time_window)
+    generator = GeneratorSA(data_shape, latent_dim, headsg, embedg, dropout=dropout, seq_dim=time_window)
+    discriminator = DiscriminatorSA(data_shape, time_window, headsd, embedd, dropout=dropout, seq_dim=time_window)
     
-    dataset_train = IntoDataset(df_train, time_window)
-    dataset_val = IntoDataset(df_val, time_window)
     return WganTrain(dataset_train, generator, discriminator, lrd, lrg, epochs, dataset_val, y_val, n_critic, clip_value, latent_dim, optim,
-              wdd, wdg, early_stopping, dropout, print_each_n, time_window, batch_size)
+              wdd, wdg, early_stopping, dropout, print_each_n, time_window, batch_size, return_auc=return_auc)
+        
+def RunModelSelfAttention(dataset_train: IntoDataset, dataset_val: IntoDataset, y_val):
+    generator_sa, discriminator_sa = TrainSelfAttention(dataset_train, 5e-5, 5e-5, 10, dataset_val, y_val, wdd=6e-4, wdg=9e-4, clip_value = 0.9, optim=torch_optimizer.Yogi,
+                early_stopping=EarlyStopping(3, 0), latent_dim=10, batch_size=128, n_critic=5, time_window=40,
+                headsd=40, embedd=240, headsg=40, embedg=240)
+    torch.save(generator_sa, "GeneratorSA.torch")
+    torch.save(discriminator_sa, "DiscriminatorSA.torch")
