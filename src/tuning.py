@@ -51,9 +51,15 @@ def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series):
         dataset_train = IntoDataset(df_train, time_window)
         dataset_val = IntoDataset(df_val, time_window)
         _, _, auc_score = TrainSelfAttention(dataset_train, lrd, lrg, epochs, dataset_val, y_val,
-            n_critic, clip_value, latent_dim, optim, wdd, wdg, early_stopping, dropout, 1e32, time_window, batch_size, headsd,
-            embedd, headsg, embedg, return_auc=True)
+            n_critic, clip_value, latent_dim, optim, wdd, wdg, early_stopping, dropout, 1e32,
+            time_window, batch_size, headsd, embedd, headsg, embedg, return_auc=True)
         
+        print(f"Trial: {trial.number} finished with auc score {auc_score}")
+        print(f"Parameters: lrd:{lrd}, lrg:{lrg}, n_critic:{n_critic}, clip_value:{clip_value}")
+        print(f"latent_dim:{latent_dim}, optim:{optim}, wdd:{wdd}, wdg:{wdg}, dropout:{dropout}")
+        print(f"time_window:{time_window}, batch_size:{batch_size}, headsd:{headsd}, embedd:{embedd}")
+        print(f"headsg:{headsg}, embedg:{embedg}")
+        print()
         return auc_score
     study = optuna.create_study(direction="maximize")
     

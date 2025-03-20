@@ -116,10 +116,16 @@ def TrainSelfAttention(dataset_train: IntoDataset, lrd, lrg, epochs, dataset_val
     
     return WganTrain(dataset_train, generator, discriminator, lrd, lrg, epochs, dataset_val, y_val, n_critic, clip_value, latent_dim, optim,
               wdd, wdg, early_stopping, dropout, print_each_n, time_window, batch_size, return_auc=return_auc)
-        
+
+# Trial: 52 finished with auc score 0.9769311342122826
+# Parameters: lrd:0.0009736389338556692, lrg:0.00029387581578970275, n_critic:6, clip_value:0.607378262065001
+# latent_dim:11, optim:<class 'torch.optim.adam.Adam'>, wdd:0.0014104261109490986, wdg:0.009448761160088458, dropout:0.2153048181561131
+# time_window:52, batch_size:3, headsd:52, embedd:156
+# headsg:24, embedg:48
 def RunModelSelfAttention(dataset_train: IntoDataset, dataset_val: IntoDataset, y_val):
-    generator_sa, discriminator_sa = TrainSelfAttention(dataset_train, 5e-5, 5e-5, 10, dataset_val, y_val, wdd=6e-4, wdg=9e-4, clip_value = 0.9, optim=torch_optimizer.Yogi,
-                early_stopping=EarlyStopping(3, 0), latent_dim=10, batch_size=128, n_critic=5, time_window=40,
-                headsd=40, embedd=240, headsg=40, embedg=240)
+    generator_sa, discriminator_sa = TrainSelfAttention(dataset_train, 9.73e-4, 2.94e-4, 50, 
+                dataset_val, y_val, wdd=1.41e-3, wdg=9.44e-3, clip_value = 0.607, optim=torch.optim.Adam,
+                early_stopping=EarlyStopping(15, 0), latent_dim=11, batch_size=3, n_critic=6,
+                time_window=52, headsd=52, embedd=156, headsg=24, embedg=48)
     torch.save(generator_sa, "GeneratorSA.torch")
     torch.save(discriminator_sa, "DiscriminatorSA.torch")

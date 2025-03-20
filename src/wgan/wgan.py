@@ -28,6 +28,7 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
     print_each_n = 20, time_window = 40, batch_size=5, do_print = False, step_by_step = False, return_auc = False) -> tuple[Generator, Discriminator]:
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
+    best_auc_score = 0;
     data_ex = dataset_train[0]
     # print(data_ex)
     data_shape = data_ex.shape
@@ -125,6 +126,8 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
             best_thresh = metrics.best_validation_threshold(y_val, preds)
             thresh = best_thresh["thresholds"]
             auc_score = roc_auc_score(y_val, preds)
+            if auc_score > best_auc_score:
+                best_auc_score = auc_score
             print("\nValidation accuracy: ", metrics.accuracy(y_val, preds > thresh))
             print("AUC score: ", auc_score, "\n")
             # Mecanismo de early stopping
@@ -137,7 +140,7 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
                     discriminator = torch.load('checkpoint.pt', weights_only = False)
                     generator = torch.load('checkpoint2.pt', weights_only = False)
                     if return_auc:
-                        return generator, discriminator, auc_score
+                        return generator, discriminator, best_auc_score
                     else:
                         return generator, discriminator
             discriminator.train()
@@ -147,7 +150,7 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
     discriminator = torch.load('checkpoint.pt', weights_only = False)
     generator = torch.load('checkpoint2.pt', weights_only = False)
     if return_auc:
-        return generator, discriminator, auc_score
+        return generator, discriminator, best_auc_score
     else:
         return generator, discriminator
 

@@ -119,14 +119,14 @@ def main():
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
-    time_window = 40
+    time_window = 52
     dataset_train = IntoDataset(df_train, time_window)
     dataset_val = IntoDataset(df_val, time_window)
     dataset_test = IntoDataset(df_test, time_window)
     if len(sys.argv) > 3 and sys.argv[3] == "train":
         if sys.argv[4] == "linear":
-            dataset_train = IntoDatasetNoTime(df_train, time_window)
-            dataset_val = IntoDatasetNoTime(df_val, time_window)
+            dataset_train = IntoDatasetNoTime(df_train)
+            dataset_val = IntoDatasetNoTime(df_val)
             generator, discriminator = TrainLinear(df_train, 2e-5, 3e-5, 10, df_val, y_val,
                 n_critic=3, optim=torch_optimizer.Yogi, wdd=2e-2, wdg=2e-2, early_stopping=EarlyStopping(3, 0), batch_size=100)
             torch.save(generator, "GeneratorLinear.torch")
@@ -138,20 +138,20 @@ def main():
             TuneSA(df_train, df_val, y_val)
     elif len(sys.argv) > 3 and (sys.argv[3] == "val" or sys.argv[3] == "test"):
         if sys.argv[3] == "val":
-            df_x = df_val
+            dataset_x = dataset_val
             df_x_label = df_val_label
             y_x = y_val
         else:
-            df_x = df_test
+            dataset_x = dataset_test
             df_x_label = df_test_label
             y_x = y_test
-        discriminator_sa: Discriminator = torch.load("Discriminator.torch", weights_only = False).to(device)
-        generator_sa: Generator = torch.load("Generator.torch", weights_only = False).to(device)
+        discriminator_sa: Discriminator = torch.load("DiscriminatorSA.torch", weights_only = False).to(device)
+        generator_sa: Generator = torch.load("GeneratorSA.torch", weights_only = False).to(device)
         discriminator_sa = discriminator_sa.eval()
         generator_sa = generator_sa.eval()
         if len(sys.argv) == 4 or sys.argv[4] == "look":
-            preds = discriminate(discriminator_sa, df_x, 400)
-            for i, val in df_x.iterrows():
+            preds = discriminate(discriminator_sa, dataset_x, 400)
+            for i, val in dataset_x.iterrows():
                 label = df_x_label.loc[i]
                 result = preds[i]
                 if random.randint(0,1) == -1:
@@ -167,9 +167,9 @@ def main():
         elif sys.argv[4] == "thresh":
             # Get predicitons of df_val
             if False:
-                preds = discriminate(discriminator_sa, df_x, 35, 1)
+                preds = discriminate(discriminator_sa, dataset_x, 35, 1)
             else:
-                preds = discriminate(discriminator_sa, df_x, 40)
+                preds = discriminate(discriminator_sa, dataset_x, time_window)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
             thresh = best_thresh["thresholds"]
             if len(sys.argv) == 5 or sys.argv[5] == "metrics" or sys.argv[5] == "both":
