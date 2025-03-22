@@ -22,3 +22,15 @@ class IntoDataset(Dataset):
             pad_rows = target_size[0] - x.shape[0]
             x_pad = pad(x_pad, (0, 0, 0, pad_rows), value=0)
         return x_pad
+
+class IntoDatasetNoTime(Dataset):
+    def __init__(self, dataframe):
+        self.dataframe = dataframe
+
+    def __len__(self):
+        return len(self.dataframe)
+
+    def __getitem__(self, idx):
+        x = self.dataframe.iloc[idx].to_numpy()
+        x = torch.tensor(x, dtype=torch.float32)
+        return x

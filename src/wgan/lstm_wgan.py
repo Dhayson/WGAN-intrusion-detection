@@ -1,55 +1,31 @@
+import pandas as pd
 import time
 import numpy as np
-import pandas as pd
-
-from torch.autograd import Variable
 
 import torch.nn as nn
 import torch
-import src.metrics as metrics
-from sklearn.metrics import roc_auc_score
 
 from src.early_stop import EarlyStopping
-from src.self_attention import SelfAttention
-from src.self_attention import PositionalEncoding
+
+from src.wgan.wgan import Generator, Discriminator
 from src.into_dataloader import IntoDataset
-
-from torch.utils.data import DataLoader
-
 from src.lstm import LSTM
+from torch.utils.data import DataLoader
+from src.wgan.wgan import discriminate
+from src.metrics import roc_auc_score
+import src.metrics as metrics
 
 cuda = True if torch.cuda.is_available() else False
 device = "cuda" if cuda else "cpu"
-
-class BlockSelfAttention(nn.Module):
-    def __init__(self, embed_dim, heads, dropout):
-       super(BlockSelfAttention, self).__init__()
-       self.pos = PositionalEncoding(embed_dim, 0)
-       self.mha = SelfAttention(embed_dim, heads, dropout)
-       self.norm = nn.LayerNorm(embed_dim)
-
-    def forward(self, x):
-        # print("BLOCK SA")
-        # print(" ", x.shape)
-        x = self.pos(x)
-        # print(" ", x.shape)
-        attention = self.mha(x)
-        # print(" ", attention.shape)
-        z = x + attention
-        # print(" ", z.shape)
-        normalized = self.norm(z)
-        return normalized
-
-
 
 def block_mlp(in_feat, out_feat, leak = 0.0):
     layers = [nn.Linear(in_feat, out_feat)]
     layers.append(nn.LeakyReLU(negative_slope=leak, inplace=True))
     return layers
 
-class Generator(nn.Module):
-    def __init__(self, data_shape, latent_dim, heads, internal_dim, dropout=0.2):
-        super(Generator, self).__init__()
+class GeneratorLSTM(nn.Module):
+    def __init__(self, data_shape, latent_dim, internal_dim, dropout=0.2):
+        super(GeneratorLSTM, self).__init__()
         self.data_shape = data_shape
         self.latent_dim = latent_dim
         
@@ -70,9 +46,9 @@ class Generator(nn.Module):
         data = self.fc2(data)
         return data
 
-class Discriminator(nn.Module):
-    def __init__(self, data_shape, time_window, heads, internal_dim, dropout=0.2):
-        super(Discriminator, self).__init__()
+class DiscriminatorLSTM(nn.Module):
+    def __init__(self, data_shape, internal_dim, dropout=0.2):
+        super(DiscriminatorLSTM, self).__init__()
         self.fc1 = nn.Sequential(
             *block_mlp(int(data_shape[1]), internal_dim, leak=0.1),
         )
@@ -97,14 +73,13 @@ class Discriminator(nn.Module):
             print(val.shape)
             print()
         return val
-
-def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
+    
+def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
-    print_each_n = 100, time_window = 40, batch_size=5, do_print = False, step_by_step = False, headsd=40, embedd=400, headsg=40, embedg=400
-    ) -> tuple[Generator, Discriminator]:
-    assert(embedd % headsd == 0)
-    assert(embedg % headsg == 0)
+    print_each_n = 100, time_window = 40, batch_size=5, do_print = False, step_by_step = False, internal_d=400, internal_g=400
+    ) -> tuple[GeneratorLSTM, DiscriminatorLSTM]:
     dataset_train = IntoDataset(df_train, time_window)
+    dataset_val = IntoDataset(df_val, time_window)
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
     data_ex = dataset_train[0]
@@ -113,8 +88,8 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
     # print('data_shape', data_shape)
     
     # Initialize generator and discriminator
-    generator = Generator(data_shape, latent_dim, headsg, embedd, dropout=dropout)
-    discriminator = Discriminator(data_shape, time_window, headsd, embedg, dropout=dropout)
+    generator = GeneratorLSTM(data_shape, latent_dim, internal_d, dropout=dropout)
+    discriminator = DiscriminatorLSTM(data_shape, internal_d, dropout=dropout)
 
     if cuda:
         print("INFO: Using cuda to train")
@@ -205,7 +180,7 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
         print(f"Epoch training time: {end-start:.3f} seconds")
         if df_val is not None and y_val is not None:
             discriminator.eval()
-            preds = discriminate(discriminator, df_val, time_window)
+            preds = discriminate(discriminator, dataset_val, time_window)
             preds = np.mean(preds, axis=1)
             preds = np.squeeze(preds)
             best_thresh = metrics.best_validation_threshold(y_val, preds)
@@ -230,27 +205,3 @@ def Train(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None,
     discriminator = torch.load('checkpoint.pt', weights_only = False)
     generator = torch.load('checkpoint2.pt', weights_only = False)
     return generator, discriminator
-
-@torch.no_grad
-def discriminate(discriminator: Discriminator, df: pd.DataFrame, time_window = 40, batch_size=200) -> list: 
-    dataset_val = IntoDataset(df, time_window)
-    dataloader_val = DataLoader(dataset_val, batch_size, shuffle=False)
-    
-    scores = []
-    i = 0
-    start = time.time()
-    for batch in dataloader_val:
-        data = batch.to(device)
-        # print(data.shape)
-        score = discriminator(data, do_print=False).cpu().detach().numpy()
-        if i%100 == 0:
-            print(f"\r[Validating] [Sample {i} / {len(dataloader_val)}] [Score {score[0]}]", end="")
-        i+=1
-        for s in score:
-            scores.append(-s)
-    end = time.time()
-    print()
-    print(f"Validation time: {end-start}")
-    if batch_size == 1:
-        print(f"Average detection time: {(end-start)/len(df)} seconds")
-    return scores
