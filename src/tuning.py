@@ -5,6 +5,7 @@ import optuna
 from src.early_stop import EarlyStopping
 from src.into_dataloader import IntoDataset
 from src.wgan.self_attention_wgan import TrainSelfAttention
+from src.transform import MeanNormalizeTensor, MinMaxNormalizeTensor
 
 def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series, sa_layers = 1):
     def objective(trial: optuna.trial.Trial):
@@ -39,6 +40,8 @@ def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series, sa_la
         # embedg: dimensão das entradas do gerador. NOTA: embedg / headsg deve ser inteiro
         headsg = trial.suggest_int("headsg", 20, 28, step=2)
         embedg = headsg*trial.suggest_int("embedg_factor", 1, 3)
+        # normalização: preprocessamento do dataset
+        normalization = MeanNormalizeTensor(df_train.mean().to_numpy(dtype=np.float32), df_train.std().to_numpy(dtype=np.float32))
         #
         # Fatores:
         # early_stopping: quantas epochs treinar sem gerar uma melhoria
@@ -48,8 +51,8 @@ def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series, sa_la
         # data_len: tamanho de uma entrada do dataset (40)
         data_len = 40
         
-        dataset_train = IntoDataset(df_train, time_window)
-        dataset_val = IntoDataset(df_val, time_window)
+        dataset_train = IntoDataset(df_train, time_window, normalization)
+        dataset_val = IntoDataset(df_val, time_window, normalization)
         
         print(f"Trial: {trial.number} started")
         print(f"Parameters: lrd:{lrd}, lrg:{lrg}, n_critic:{n_critic}, clip_value:{clip_value}")

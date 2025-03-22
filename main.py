@@ -8,17 +8,14 @@ import src.metrics as metrics
 import sys
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
 from numpy.random import RandomState
 import torch
 import torch_optimizer
 from ipaddress import IPv4Address
-from torch.autograd import Variable
 import random
 from src.early_stop import EarlyStopping
 from src.into_dataloader import IntoDataset, IntoDatasetNoTime
+from src.transform import MeanNormalizeTensor, MinMaxNormalizeTensor
 
 # OBS: o dataset completo não cabe no repositório, mas pode ser baixado em http://205.174.165.80/CICDataset/CICDDoS2019/Dataset/CSVs/
 
@@ -97,32 +94,24 @@ def main():
     
     train_min = df_train.min().astype("float64")
     train_max = df_train.max().astype("float64")
-    min_max = (train_max - train_min).to_numpy()
+    # min_max = (train_max - train_min).to_numpy()
     
     # Normalização
-    # TODO: fazer de uma forma que fique salvo para depois
-    df_train = (df_train - df_train.min())/(df_train.max() - df_train.min())
     df_train = df_train.fillna(0)
-    
-    # train_mean = df_train.mean().astype("float64")
-    # df_train = df_train - train_mean
-    
-    df_val: pd.DataFrame = (df_val - train_min)/(min_max)
     df_val = df_val.fillna(0)
-    # df_val = df_val - train_mean
-
-    df_test: pd.DataFrame = (df_test - train_min)/(min_max)
     df_test = df_test.fillna(0)
-    # df_test = df_test - train_mean
     
+    # normalization = MeanNormalizeTensor(df_train.mean().to_numpy(dtype=np.float32), df_train.std().to_numpy(dtype=np.float32))
+    normalization = MinMaxNormalizeTensor(df_train.max().to_numpy(dtype=np.float32), df_train.min().to_numpy(dtype=np.float32))
+        
     # Validação: diferenciar entre benignos (0) e ataques (1)
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
     time_window = 52
-    dataset_train = IntoDataset(df_train, time_window)
-    dataset_val = IntoDataset(df_val, time_window)
-    dataset_test = IntoDataset(df_test, time_window)
+    dataset_train = IntoDataset(df_train, time_window, normalization)
+    dataset_val = IntoDataset(df_val, time_window, normalization)
+    dataset_test = IntoDataset(df_test, time_window, normalization)
     if len(sys.argv) > 3 and sys.argv[3] == "train":
         if sys.argv[4] == "linear":
             dataset_train = IntoDatasetNoTime(df_train)
