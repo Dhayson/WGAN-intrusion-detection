@@ -169,6 +169,7 @@ def discriminate(discriminator: Discriminator, dataset_val: IntoDataset, time_wi
         score = discriminator(data, do_print=False).cpu().detach().numpy()
         if i%50 == 0:
             print(f"\r[Validating] [Sample {i} / {len(dataloader_val)}] [Score {score[0]}]", end="")
+            sys.stdout.flush()
         i+=1
         for s in score:
             scores.append(-s)
