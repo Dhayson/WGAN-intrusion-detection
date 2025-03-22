@@ -21,27 +21,6 @@ from src.lstm import LSTM
 cuda = True if torch.cuda.is_available() else False
 device = "cuda" if cuda else "cpu"
 
-class BlockSelfAttention(nn.Module):
-    def __init__(self, embed_dim, heads, dropout):
-       super(BlockSelfAttention, self).__init__()
-       self.pos = PositionalEncoding(embed_dim, 0)
-       self.mha = SelfAttention(embed_dim, heads, dropout)
-       self.norm = nn.LayerNorm(embed_dim)
-
-    def forward(self, x):
-        # print("BLOCK SA")
-        # print(" ", x.shape)
-        x = self.pos(x)
-        # print(" ", x.shape)
-        attention = self.mha(x)
-        # print(" ", attention.shape)
-        z = x + attention
-        # print(" ", z.shape)
-        normalized = self.norm(z)
-        return normalized
-
-
-
 def block_mlp(in_feat, out_feat, leak = 0.0):
     layers = [nn.Linear(in_feat, out_feat)]
     layers.append(nn.LeakyReLU(negative_slope=leak, inplace=True))

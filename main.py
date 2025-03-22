@@ -1,6 +1,7 @@
 from src.import_dataset import GetDataset
 from src.dataset_split import SplitDataset
-from src.wgan import Train, discriminate, Discriminator, Generator, cuda
+from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
+from src.wgan.lstm_wgan import TrainLSTM
 import src.metrics as metrics
 import sys
 import numpy as np
@@ -111,11 +112,12 @@ def main():
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
     if len(sys.argv) > 3 and sys.argv[3] == "train":
-        generator, discriminator = Train(df_train, 2e-4, 1e-4, 10, df_val, y_val, wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
-            early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64, n_critic=4, time_window=80,
-            headsd=80, embedd=240, headsg=80, embedg=240)
-        torch.save(generator, "Generator.torch")
-        torch.save(discriminator, "Discriminator.torch")
+        if sys.argv[4] == "lstm":
+            generator, discriminator = TrainLSTM(df_train, 2e-4, 1e-4, 10, df_val, y_val, wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
+                early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64, n_critic=4, time_window=80,
+                internal_d=240, internal_g=240)
+            torch.save(generator, "Generator.torch")
+            torch.save(discriminator, "Discriminator.torch")
         
     elif len(sys.argv) > 3 and (sys.argv[3] == "val" or sys.argv[3] == "test"):
         if sys.argv[3] == "val":
