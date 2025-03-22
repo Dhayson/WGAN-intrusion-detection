@@ -45,7 +45,7 @@ def block_mlp(in_feat, out_feat, leak = 0.0):
     return layers
 
 class GeneratorSA(Generator):
-    def __init__(self, data_shape, latent_dim, heads, internal_dim, dropout=0.2, seq_dim=None):
+    def __init__(self, data_shape, latent_dim, heads, internal_dim, dropout=0.2, seq_dim=None, sa_layers = 1):
         super(GeneratorSA, self).__init__()
         self.data_shape = data_shape
         self.latent_dim = latent_dim
@@ -53,7 +53,13 @@ class GeneratorSA(Generator):
         self.fc1 = nn.Sequential(
             *block_mlp(latent_dim, internal_dim, leak=0.1),
         )
-        self.sa = BlockSelfAttention(internal_dim, heads, dropout, seq_dim)
+        if sa_layers == 1:
+            self.sa = BlockSelfAttention(internal_dim, heads, dropout, seq_dim)
+        elif sa_layers == 2:
+            self.sa = nn.Sequential(
+                BlockSelfAttention(internal_dim, heads, dropout, seq_dim),
+                BlockSelfAttention(internal_dim, heads, dropout, seq_dim)
+            )
         self.fc2 = nn.Sequential(
             nn.Linear(internal_dim, int(data_shape[1])),
             nn.Sigmoid(),
@@ -74,13 +80,19 @@ class GeneratorSA(Generator):
         return data
 
 class DiscriminatorSA(Discriminator):
-    def __init__(self, data_shape, time_window, heads, internal_dim, dropout=0.2, seq_dim=None):
+    def __init__(self, data_shape, time_window, heads, internal_dim, dropout=0.2, seq_dim=None, sa_layers = 1):
         super(DiscriminatorSA, self).__init__()
 
         self.fc1 = nn.Sequential(
             *block_mlp(int(data_shape[1]), internal_dim, leak=0.1),
         )
-        self.sa = BlockSelfAttention(internal_dim, heads, dropout, seq_dim)
+        if sa_layers == 1:
+            self.sa = BlockSelfAttention(internal_dim, heads, dropout, seq_dim)
+        elif sa_layers == 2:
+            self.sa = nn.Sequential(
+                BlockSelfAttention(internal_dim, heads, dropout, seq_dim),
+                BlockSelfAttention(internal_dim, heads, dropout, seq_dim)
+            )
         self.flat = nn.Flatten(1)
         self.fc2 = nn.Sequential(
             nn.Linear(internal_dim*time_window, 1)
@@ -107,14 +119,14 @@ class DiscriminatorSA(Discriminator):
     
 def TrainSelfAttention(dataset_train: IntoDataset, lrd, lrg, epochs, dataset_val: IntoDataset = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
-    print_each_n = 20, time_window = 40, batch_size=5, headsd=40, embedd=400, headsg=40, embedg=400, data_len=40, return_auc = False
+    print_each_n = 20, time_window = 40, batch_size=5, headsd=40, embedd=400, headsg=40, embedg=400, data_len=40, return_auc = False, sa_layers = 1
     ) -> tuple[GeneratorSA, DiscriminatorSA]:
     assert(embedd % headsd == 0)
     assert(embedg % headsg == 0)
     data_shape = (time_window, data_len)
     # Initialize generator and discriminator
-    generator = GeneratorSA(data_shape, latent_dim, headsg, embedg, dropout=dropout, seq_dim=time_window)
-    discriminator = DiscriminatorSA(data_shape, time_window, headsd, embedd, dropout=dropout, seq_dim=time_window)
+    generator = GeneratorSA(data_shape, latent_dim, headsg, embedg, dropout=dropout, seq_dim=time_window, sa_layers=sa_layers)
+    discriminator = DiscriminatorSA(data_shape, time_window, headsd, embedd, dropout=dropout, seq_dim=time_window, sa_layers=sa_layers)
     
     return WganTrain(dataset_train, generator, discriminator, lrd, lrg, epochs, dataset_val, y_val, n_critic, clip_value, latent_dim, optim,
               wdd, wdg, early_stopping, dropout, print_each_n, time_window, batch_size, return_auc=return_auc)

@@ -135,7 +135,11 @@ def main():
             RunModelSelfAttention(dataset_train, dataset_val, y_val)
     elif len(sys.argv) > 3 and sys.argv[3] == "tune":
         if sys.argv[4] == "sa":
-            TuneSA(df_train, df_val, y_val)
+            if sys.argv[5] == "2layers":
+                print("Using 2 self attention blocks")
+                TuneSA(df_train, df_val, y_val, sa_layers=2)
+            else:
+                TuneSA(df_train, df_val, y_val)
     elif len(sys.argv) > 3 and (sys.argv[3] == "val" or sys.argv[3] == "test"):
         if sys.argv[3] == "val":
             dataset_x = dataset_val
