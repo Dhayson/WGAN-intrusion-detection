@@ -79,6 +79,7 @@ def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = N
     print_each_n = 100, time_window = 40, batch_size=5, do_print = False, step_by_step = False, internal_d=400, internal_g=400
     ) -> tuple[GeneratorLSTM, DiscriminatorLSTM]:
     dataset_train = IntoDataset(df_train, time_window)
+    dataset_val = IntoDataset(df_val, time_window)
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
     data_ex = dataset_train[0]
@@ -179,7 +180,7 @@ def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = N
         print(f"Epoch training time: {end-start:.3f} seconds")
         if df_val is not None and y_val is not None:
             discriminator.eval()
-            preds = discriminate(discriminator, df_val, time_window)
+            preds = discriminate(discriminator, dataset_val, time_window)
             preds = np.mean(preds, axis=1)
             preds = np.squeeze(preds)
             best_thresh = metrics.best_validation_threshold(y_val, preds)
