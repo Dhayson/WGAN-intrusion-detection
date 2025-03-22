@@ -11,6 +11,8 @@ from src.self_attention import PositionalEncoding
 from src.wgan.wgan import Generator, Discriminator, WganTrain
 from src.into_dataloader import IntoDataset
 
+
+
 cuda = True if torch.cuda.is_available() else False
 device = "cuda" if cuda else "cpu"
 

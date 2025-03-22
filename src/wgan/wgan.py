@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import pandas as pd
+import sys
 
 import torch.nn as nn
 import torch
@@ -110,6 +111,7 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
                         % (epoch+1, epochs, batches_done % len(dataloader_train), len(dataloader_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item()),
                         end=""
                     )
+                    sys.stdout.flush()
                     if do_print and False:
                         print("fake: ", fake_data)
                         print("real: ", real_data)
@@ -165,7 +167,7 @@ def discriminate(discriminator: Discriminator, dataset_val: IntoDataset, time_wi
         data = batch.to(device)
         # print(data.shape)
         score = discriminator(data, do_print=False).cpu().detach().numpy()
-        if i%10 == 0:
+        if i%50 == 0:
             print(f"\r[Validating] [Sample {i} / {len(dataloader_val)}] [Score {score[0]}]", end="")
         i+=1
         for s in score:
