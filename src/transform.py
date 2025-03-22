@@ -10,6 +10,7 @@ class MeanNormalizeTensor:
 
     @torch.no_grad
     def __call__(self, tensor):
+        tensor = tensor.to(device)
         return (tensor - self.mean) / (self.std + 1e-9)
 
 class MinMaxNormalizeTensor:
@@ -19,4 +20,5 @@ class MinMaxNormalizeTensor:
     
     @torch.no_grad
     def __call__(self, tensor):
+        tensor = tensor.to(device)
         return (tensor - self.min) / (self.max - self.min + 1e-9)
