@@ -1,6 +1,9 @@
 from src.import_dataset import GetDataset
 from src.dataset_split import SplitDataset
-from src.wgan import Train, discriminate, Discriminator, Generator, cuda
+from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
+from src.wgan.lstm_wgan import TrainLSTM
+from src.wgan.linear_wgan import TrainLinear
+from src.wgan.self_attention_wgan import TrainSelfAttention
 import src.metrics as metrics
 import sys
 import numpy as np
@@ -100,22 +103,39 @@ def main():
     df_train = (df_train - df_train.min())/(df_train.max() - df_train.min())
     df_train = df_train.fillna(0)
     
+    # train_mean = df_train.mean().astype("float64")
+    # df_train = df_train - train_mean
+    
     df_val: pd.DataFrame = (df_val - train_min)/(min_max)
     df_val = df_val.fillna(0)
+    # df_val = df_val - train_mean
 
     df_test: pd.DataFrame = (df_test - train_min)/(min_max)
     df_test = df_test.fillna(0)
+    # df_test = df_test - train_mean
     
     # Validação: diferenciar entre benignos (0) e ataques (1)
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
     if len(sys.argv) > 3 and sys.argv[3] == "train":
-        generator, discriminator = Train(df_train, 2e-4, 1e-4, 10, df_val, y_val, wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
-            early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64, n_critic=4, time_window=80,
-            headsd=80, embedd=240, headsg=80, embedg=240)
-        torch.save(generator, "Generator.torch")
-        torch.save(discriminator, "Discriminator.torch")
+        if sys.argv[4] == "linear":
+            generator, discriminator = TrainLinear(df_train, 2e-5, 3e-5, 10, df_val, y_val,
+                n_critic=3, optim=torch_optimizer.Yogi, wdd=2e-2, wdg=2e-2, early_stopping=EarlyStopping(3, 0), batch_size=100)
+            torch.save(generator, "GeneratorLinear.torch")
+            torch.save(discriminator, "DiscriminatorLinear.torch")
+        elif sys.argv[4] == "sa":
+            generator_sa, discriminator_sa = TrainSelfAttention(df_train, 5e-5, 5e-5, 10, df_val, y_val, wdd=6e-4, wdg=9e-4, clip_value = 0.9, optim=torch_optimizer.Yogi,
+                early_stopping=EarlyStopping(3, 0), latent_dim=10, batch_size=128, n_critic=5, time_window=40,
+                headsd=40, embedd=240, headsg=40, embedg=240)
+            torch.save(generator_sa, "Generator.torch")
+            torch.save(discriminator_sa, "Discriminator.torch")
+        elif sys.argv[4] == "lstm":
+            generator, discriminator = TrainLSTM(df_train, 2e-4, 1e-4, 10, df_val, y_val, wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
+                early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64, n_critic=4, time_window=80,
+                internal_d=240, internal_g=240)
+            torch.save(generator, "Generator.torch")
+            torch.save(discriminator, "Discriminator.torch")
         
     elif len(sys.argv) > 3 and (sys.argv[3] == "val" or sys.argv[3] == "test"):
         if sys.argv[3] == "val":
@@ -126,20 +146,20 @@ def main():
             df_x = df_test
             df_x_label = df_test_label
             y_x = y_test
-        discriminator: Discriminator = torch.load("Discriminator.torch", weights_only = False).to(device)
-        generator: Generator = torch.load("Generator.torch", weights_only = False).to(device)
-        discriminator = discriminator.eval()
-        generator = generator.eval()
+        discriminator_sa: Discriminator = torch.load("Discriminator.torch", weights_only = False).to(device)
+        generator_sa: Generator = torch.load("Generator.torch", weights_only = False).to(device)
+        discriminator_sa = discriminator_sa.eval()
+        generator_sa = generator_sa.eval()
         if len(sys.argv) == 4 or sys.argv[4] == "look":
-            preds = discriminate(discriminator, df_x, 400)
+            preds = discriminate(discriminator_sa, df_x, 400)
             for i, val in df_x.iterrows():
                 label = df_x_label.loc[i]
                 result = preds[i]
                 if random.randint(0,1) == -1:
                     # Sample noise as generator input
                     z = torch.tensor(np.random.normal(0, 1, (30,)))
-                    gen = generator(z).detach()
-                    result_fake = discriminator(gen)
+                    gen = generator_sa(z).detach()
+                    result_fake = discriminator_sa(gen)
                     print("FAKE", result_fake.item())
                     # print((gen*min_max)+train_min.to_numpy())
                 else:
@@ -148,14 +168,14 @@ def main():
         elif sys.argv[4] == "thresh":
             # Get predicitons of df_val
             if False:
-                preds = discriminate(discriminator, df_x, 35, 1)
+                preds = discriminate(discriminator_sa, df_x, 35, 1)
             else:
-                preds = discriminate(discriminator, df_x, 80)
+                preds = discriminate(discriminator_sa, df_x, 40)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
             thresh = best_thresh["thresholds"]
             if len(sys.argv) == 5 or sys.argv[5] == "metrics" or sys.argv[5] == "both":
                 X = "Validation" if sys.argv[3] == "val" else "Test"
-                print(f"{X} AUC: ", metrics.roc_auc_score(y_x, preds > thresh))
+                print(f"{X} AUC: ", metrics.roc_auc_score(y_x, preds))
                 print(f"{X} accuracy: ", metrics.accuracy(y_x, preds > thresh))
                 print(f"{X} precision: ", metrics.precision_score(y_x, preds > thresh))
                 print(f"{X} recall: ", metrics.recall_score(y_x, preds > thresh))
