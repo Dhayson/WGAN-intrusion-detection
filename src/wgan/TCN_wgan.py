@@ -43,19 +43,22 @@ class TCNBlock(nn.Module):
         res = x if self.downsample is None else self.downsample(x)
         return self.relu(out + res)
 
+# --- Novas definições considerando janelas temporais ---
+# Suponha que cada janela tenha tamanho T (número de instantes consecutivos) e cada instante tenha F features.
+# Assim, cada amostra terá shape (F, T).
+
 class Generator(nn.Module):
     def __init__(self, data_shape, latent_dim, tcn_channels=32, kernel_size=3, num_tcn_layers=1):
         """
-        Transforma um vetor latente em uma amostra com a mesma dimensão dos dados reais.
+        data_shape: (T, F) onde T é o tamanho da janela (passos de tempo) e F é o número de features.
         """
         super(Generator, self).__init__()
-        self.data_shape = data_shape
-        self.latent_dim = latent_dim
-        self.num_features = int(np.prod(data_shape))
+        self.T = data_shape[0]  # janela temporal
+        self.F = data_shape[1]  # número de features (canais)
         self.tcn_channels = tcn_channels
 
-        # Expande o vetor latente e reinterpreta como sequência
-        self.fc = nn.Linear(latent_dim, tcn_channels * self.num_features)
+        # Expande o vetor latente para formar uma sequência de tamanho T (com tcn_channels canais)
+        self.fc = nn.Linear(latent_dim, tcn_channels * self.T)
         tcn_blocks = []
         for i in range(num_tcn_layers):
             tcn_blocks.append(
@@ -65,25 +68,27 @@ class Generator(nn.Module):
                          dropout=0.2)
             )
         self.tcn = nn.Sequential(*tcn_blocks)
-        self.out_conv = nn.Conv1d(tcn_channels, 1, kernel_size=1)
+        # Altera o número de canais para F (número de features)
+        self.out_conv = nn.Conv1d(tcn_channels, self.F, kernel_size=1)
     
     def forward(self, z):
         # z: (batch, latent_dim)
-        x = self.fc(z)  # (batch, tcn_channels * num_features)
-        x = x.view(-1, self.tcn_channels, self.num_features)  # Reinterpreta para (batch, tcn_channels, num_features)
-        x = self.tcn(x)
-        x = self.out_conv(x)  # Reduz os canais para 1
-        x = x.view(-1, self.num_features)  # Achata a saída para (batch, num_features)
+        x = self.fc(z)  # (batch, tcn_channels * T)
+        x = x.view(-1, self.tcn_channels, self.T)  # (batch, tcn_channels, T)
+        x = self.tcn(x)  # (batch, tcn_channels, T)
+        x = self.out_conv(x)  # (batch, F, T)
         return x
 
 class Discriminator(nn.Module):
     def __init__(self, data_shape, tcn_channels=32, kernel_size=3, num_tcn_layers=1):
         """
-        Recebe uma amostra (vetor) e a interpreta como uma sequência, retornando um escalar que representa a validade.
+        data_shape: (T, F)
         """
         super(Discriminator, self).__init__()
-        self.num_features = int(np.prod(data_shape))
-        self.input_conv = nn.Conv1d(1, tcn_channels, kernel_size=1)
+        self.T = data_shape[0]
+        self.F = data_shape[1]
+        # Projeta de F canais para tcn_channels
+        self.input_conv = nn.Conv1d(self.F, tcn_channels, kernel_size=1)
         tcn_blocks = []
         for i in range(num_tcn_layers):
             tcn_blocks.append(
@@ -93,37 +98,43 @@ class Discriminator(nn.Module):
                          dropout=0.2)
             )
         self.tcn = nn.Sequential(*tcn_blocks)
-        self.out_fc = nn.Linear(tcn_channels * self.num_features, 1)
+        # Achata para um escalar: tcn_channels * T
+        self.out_fc = nn.Linear(tcn_channels * self.T, 1)
     
     def forward(self, x):
-        # x: (batch, num_features)
-        x = x.view(-1, 1, self.num_features)
-        x = self.input_conv(x)
-        x = self.tcn(x)
-        x = x.view(-1, x.size(1) * x.size(2))
+        # x: (batch, F, T)
+        x = self.input_conv(x)  # (batch, tcn_channels, T)
+        x = self.tcn(x)         # (batch, tcn_channels, T)
+        x = x.view(x.size(0), -1)  # Flatten para (batch, tcn_channels * T)
         validity = self.out_fc(x)
         return validity
 
-def Train(df_train, lrd, lrg, epochs, df_val=None, y_val=None, n_critic=5, 
-          clip_value=1, latent_dim=30, optim=torch.optim.RMSprop, wd=1e-2):
+# Função auxiliar para criar janelas temporais a partir do DataFrame.
+def create_windows(df, window_size):
+    data = df.to_numpy()  # shape: (N, F)
+    windows = []
+    for i in range(len(data) - window_size + 1):
+        # Cada janela é composta por 'window_size' instantes consecutivos.
+        window = data[i : i + window_size]  # shape: (window_size, F)
+        windows.append(window)
+    return np.array(windows)  # shape: (num_windows, window_size, F)
+
+# --- Função de treinamento modificada ---
+def Train(df_train, lrd, lrg, epochs, window_size=50, batch_size=32,
+          df_val=None, y_val=None, n_critic=5, clip_value=1, latent_dim=30,
+          optim=torch.optim.RMSprop, wd=1e-2):
     """
-    Função de treinamento da WGAN com TCN.
-    
-    Parâmetros:
-      - df_train: DataFrame com os dados de treinamento.
-      - lrd, lrg: taxas de aprendizado para o discriminador e gerador.
-      - epochs: número de épocas de treinamento.
-      - df_val, y_val: (opcionais) dados e rótulos de validação.
-      - n_critic: número de atualizações do discriminador para cada atualização do gerador.
-      - clip_value: valor de clipagem para os pesos do discriminador.
-      - latent_dim: dimensão do vetor latente.
-      - optim: otimizador utilizado.
-      - wd: weight decay.
+    Treinamento da WGAN com TCN utilizando janelas temporais.
+    df_train: DataFrame com os dados de treinamento (linhas ordenadas cronologicamente).
+    window_size: número de instantes em cada janela.
     """
-    data_shape = df_train.iloc[0].shape
+    # Supondo que as colunas do df_train são as features (excluindo timestamp etc.)
+    num_features = df_train.shape[1]
+    # data_shape agora é (T, F)
+    data_shape = (window_size, num_features)
     print_each_n = 3000
 
-    # Inicializa o gerador e o discriminador com parâmetros padrão (você pode ajustar conforme necessário)
+    # Inicializa gerador e discriminador com a nova estrutura
     generator = Generator(data_shape, latent_dim, tcn_channels=32, kernel_size=3, num_tcn_layers=1)
     discriminator = Discriminator(data_shape, tcn_channels=32, kernel_size=3, num_tcn_layers=1)
 
@@ -136,15 +147,27 @@ def Train(df_train, lrd, lrg, epochs, df_val=None, y_val=None, n_critic=5,
 
     Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
+    # Cria as janelas temporais a partir do df_train
+    windows = create_windows(df_train, window_size)  # shape: (num_windows, window_size, num_features)
+    num_windows = windows.shape[0]
+
     batches_done = 0
     for epoch in range(epochs):
-        for i, datum in df_train.iterrows():
-            real_data = Variable(torch.from_numpy(datum.to_numpy()).type(Tensor))
+        # Embaralha as janelas a cada época
+        indices = np.random.permutation(num_windows)
+        for i in range(0, num_windows, batch_size):
+            batch_indices = indices[i:i+batch_size]
+            batch_windows = windows[batch_indices]  # shape: (batch, window_size, num_features)
+            # Converte para tensor e reordena para (batch, F, T)
+            real_data = torch.from_numpy(batch_windows).float().permute(0, 2, 1)
+            real_data = Variable(real_data).type(Tensor)
+            
             optimizer_D.zero_grad()
 
-            # Amostra ruído para gerar dados falsos
-            z = Variable(Tensor(np.random.normal(0, 1, (latent_dim,))))
-            fake_data = generator(z).detach()
+            # Amostra ruído para gerar dados falsos (batch_size x latent_dim)
+            z = Variable(Tensor(np.random.normal(0, 1, (real_data.size(0), latent_dim))))
+            fake_data = generator(z).detach()  # fake_data shape: (batch, F, T)
+
             loss_D_true = torch.mean(discriminator(real_data))
             loss_D_fake = torch.mean(discriminator(fake_data))
             loss_D = -loss_D_true + loss_D_fake
@@ -156,29 +179,33 @@ def Train(df_train, lrd, lrg, epochs, df_val=None, y_val=None, n_critic=5,
             for p in discriminator.parameters():
                 p.data.clamp_(-clip_value, clip_value)
 
-            if i % n_critic == 0:
+            if batches_done % n_critic == 0:
                 optimizer_G.zero_grad()
                 gen_data = generator(z)
                 loss_G = -torch.mean(discriminator(gen_data))
                 loss_G.backward()
                 optimizer_G.step()
 
-                if i % print_each_n == 0:
+                if batches_done % print_each_n == 0:
                     print("[Epoch %d/%d] [Batch %d/%d] [D true loss: %f] [D fake loss: %f] [G loss: %f]" %
-                          (epoch+1, epochs, batches_done % len(df_train), len(df_train),
+                          (epoch+1, epochs, batches_done % num_windows, num_windows,
                            loss_D_true.item(), loss_D_fake.item(), loss_G.item()))
             batches_done += 1
     return generator, discriminator
 
-def discriminate(discriminator, df):
+def discriminate(discriminator, df, window_size=50):
     """
-    Calcula os escores do discriminador para cada amostra de um DataFrame.
+    Calcula os escores do discriminador para cada janela temporal gerada a partir do DataFrame.
+    Assumindo que df é um DataFrame ordenado cronologicamente e que você já pré-processou os dados.
     """
     Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+    windows = create_windows(df, window_size)  # Função para criar janelas
     results = []
-    for i, row in df.iterrows():
-        row_np = row.to_numpy()
-        row_tensor = torch.from_numpy(row_np).type(Tensor).unsqueeze(0)
-        output = discriminator(row_tensor)
+    for i in range(len(windows)):
+        # Cada janela: (window_size, num_features)
+        # Reordena para (1, num_features, window_size) para o discriminador
+        window = torch.from_numpy(windows[i]).float().permute(1, 0).unsqueeze(0)
+        window = window.type(Tensor)
+        output = discriminator(window)
         results.append(output.item())
     return results
