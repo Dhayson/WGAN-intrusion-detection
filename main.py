@@ -165,6 +165,7 @@ def main():
                     print(label, result.item())
                     # print(val_f_old)
         elif sys.argv[4] == "thresh":
+            X = "Validation" if sys.argv[3] == "val" else "Test"
             # Get predicitons of df_val
             if False:
                 preds = discriminate(discriminator_sa, dataset_x, 35, 1)
@@ -173,7 +174,6 @@ def main():
             best_thresh = metrics.best_validation_threshold(y_x, preds)
             thresh = best_thresh["thresholds"]
             if len(sys.argv) == 5 or sys.argv[5] == "metrics" or sys.argv[5] == "both":
-                X = "Validation" if sys.argv[3] == "val" else "Test"
                 print(f"{X} AUC: ", metrics.roc_auc_score(y_x, preds))
                 print(f"{X} accuracy: ", metrics.accuracy(y_x, preds > thresh))
                 print(f"{X} precision: ", metrics.precision_score(y_x, preds > thresh))
@@ -186,6 +186,13 @@ def main():
                     metrics.plot_confusion_matrix(y_x, preds > thresh, name=sys.argv[3])
                 if sys.argv[5] == "curve" or sys.argv[5] == "both":
                     metrics.plot_roc_curve(y_x, preds, name=sys.argv[3])
+                if sys.argv[5] == "attacks":
+                    for i in ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn", "Portmap"]:
+                        idxs = df_x_label[df_x_label==i].index
+                        y_x_i = y_x.loc[idxs]
+                        preds_i = [preds[i] for i in idxs.tolist()]
+                        print(f"{X} accuracy of {i}: ", metrics.accuracy(y_x_i, preds_i > thresh))
+                  
     elif len(sys.argv) > 3 and sys.argv[3] == "minmax":
         # Mapeando endereços ip para valores inteiros
         df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
