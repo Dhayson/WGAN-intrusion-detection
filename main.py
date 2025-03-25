@@ -25,7 +25,6 @@ def DescartarDuplicatas(dataset: pd.DataFrame, do_print = False):
     dataset = dataset.drop_duplicates()
     if do_print:
         print(f'Tamanho inicial: {initial_len}, tamanho final {dataset.shape[0]} | Descartadas {initial_len - dataset.shape[0]} duplicadas')
-        print(dataset['Label'].value_counts())
         print()
     return dataset
 

@@ -63,7 +63,7 @@ def GetDataset(path: str, rs: RandomState, dataset_format="csv", label="both", f
                 df_aux_mal = df_aux[df_aux["Label"] == kind]
                 if len(df_aux_mal) > 0 and do_print:
                     print(f"found kind {kind} in {path}/{file}")
-                df_aux_mal = df_aux_mal.sample(n=min(11342, len(df_aux_mal)), random_state=rs)
+                df_aux_mal = df_aux_mal.head(n=min(11342, len(df_aux_mal)))
                 df_aux_list.append(df_aux_mal)
         
         df_list.append(pd.concat(df_aux_list))
