@@ -14,7 +14,8 @@ def SplitDataset(df_day_1: pd.DataFrame, df_day_2: pd.DataFrame, rs: RandomState
         BENIGN = "Benign"
     
     # Para o treino, queremos apenas dados benignos do segundo dia
-    df_train = df_day_2[df_day_2['Label'] == BENIGN].sample(frac=0.8, random_state=rs).sort_index()
+    n = int(0.8*len(df_day_2[df_day_2['Label'] == BENIGN]))
+    df_train = df_day_2[df_day_2['Label'] == BENIGN].head(n).sort_index()
     
     # Para validação, queremos os demais dados benignos e os dados malignos do segundo dia
     df_val_mal = df_day_2[df_day_2["Label"].isin(["Syn", "UDP", "UDPLag", "MSSQL", "NetBIOS", "LDAP"])]
@@ -35,18 +36,17 @@ def SplitDataset(df_day_1: pd.DataFrame, df_day_2: pd.DataFrame, rs: RandomState
             
         df_test_mal = pd.concat([
             df_test_mal,
-            df_day_1[df_day_1["Label"] == at].sample(
-                n=min(df_day_1[df_day_1["Label"] == at].__len__(), max_entries), 
-                random_state=rs
+            df_day_1[df_day_1["Label"] == at].head(
+                n=min(df_day_1[df_day_1["Label"] == at].__len__(), max_entries)
                 )
             ])
     
-    df_test_ben = df_day_1[df_day_1['Label']==BENIGN].sample(
-        n=min(df_day_1[df_day_1['Label']==BENIGN].__len__(), 50000, df_test_mal.__len__()), random_state=rs
+    df_test_ben = df_day_1[df_day_1['Label']==BENIGN].head(
+        n=min(df_day_1[df_day_1['Label']==BENIGN].__len__(), 50000, df_test_mal.__len__())
     )
     
-    df_test_mal = df_test_mal.sample(
-        n=min(df_test_ben.__len__(), 50000), random_state=rs
+    df_test_mal = df_test_mal.head(
+        n=min(df_test_ben.__len__(), 50000)
     )
     df_test = pd.concat([df_test_ben, df_test_mal])
     
