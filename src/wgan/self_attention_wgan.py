@@ -137,9 +137,9 @@ def TrainSelfAttention(dataset_train: IntoDataset, lrd, lrg, epochs, dataset_val
 # time_window:52, batch_size:3, headsd:52, embedd:156
 # headsg:24, embedg:48
 def RunModelSelfAttention(dataset_train: IntoDataset, dataset_val: IntoDataset, y_val):
-    generator_sa, discriminator_sa = TrainSelfAttention(dataset_train, 9.73e-4, 2.94e-4, 50, 
-                dataset_val, y_val, wdd=1.41e-3, wdg=9.44e-3, clip_value = 0.607, optim=torch.optim.Adam,
-                early_stopping=EarlyStopping(15, 0), latent_dim=11, batch_size=3, n_critic=6,
-                time_window=52, headsd=52, embedd=156, headsg=24, embedg=48)
+    generator_sa, discriminator_sa = TrainSelfAttention(dataset_train, 0.001415985610323725, 0.000422450153064943, 50, 
+                dataset_val, y_val, wdd=0.0012495539024651343, wdg=0.009874441543604277, clip_value = 0.57130348892112, optim=torch.optim.Adam,
+                early_stopping=EarlyStopping(5, 0), dropout=0.21989246350036984, latent_dim=13, batch_size=12, n_critic=8,
+                time_window=52, headsd=40, embedd=80, headsg=24, embedg=24)
     torch.save(generator_sa, "GeneratorSA.torch")
     torch.save(discriminator_sa, "DiscriminatorSA.torch")
