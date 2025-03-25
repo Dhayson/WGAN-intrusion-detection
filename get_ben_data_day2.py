@@ -24,6 +24,7 @@ def main():
     # Nesse caso já está dividido entre treino e teste, isto é, entre o primeiro e o segundo dia
     df_day_2_ben = GetDataset(sys.argv[1], rs, DATASET_FORMAT, "ben")
     df_day_2_ben = DescartarDuplicatas(df_day_2_ben, do_print=True)
+    print(df_day_2_ben['Label'].value_counts())
     df_day_2_ben.to_csv("dataset_filtered2/Day2/day2_benign.csv", encoding='utf-8', index=False)
     print()
 
