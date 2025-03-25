@@ -127,11 +127,11 @@ def main():
             torch.save(discriminator_sa, "Discriminator.torch")
         elif sys.argv[4] == "lstm":
             generator, discriminator = TrainLSTM(
-                df_train, 2e-4, 1e-4, 10, df_val, y_val,
+                df_train, 0.00010870300025198446, 0.00028247627584454017, 10, df_val, y_val,
                 wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
                 early_stopping=EarlyStopping(15, 0), latent_dim=10,
-                batch_size=64, n_critic=4, time_window=80,
-                internal_d=240, internal_g=240
+                batch_size=128, n_critic=3, time_window=80,
+                internal_d=512, internal_g=512, clip_value=0.1
             )
             torch.save(generator, "Generator.torch")
             torch.save(discriminator, "Discriminator.torch")
