@@ -62,7 +62,6 @@ class GeneratorSA(Generator):
             )
         self.fc2 = nn.Sequential(
             nn.Linear(internal_dim, int(data_shape[1])),
-            nn.Sigmoid(),
         )
         self.flat = nn.Flatten(0)
 
