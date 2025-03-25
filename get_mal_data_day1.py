@@ -24,6 +24,17 @@ def main():
     # Nesse caso já está dividido entre treino e teste, isto é, entre o primeiro e o segundo dia
     df_day_1_mal = GetDataset(sys.argv[1], rs, DATASET_FORMAT, "mal")
     df_day_1_mal = DescartarDuplicatas(df_day_1_mal, do_print=True)
+    
+    for kind in ["Syn", "DrDoS_UDP", "UDP-lag", "DrDoS_MSSQL", "DrDoS_NetBIOS", "DrDoS_LDAP", "UDP", "UDPLag", "MSSQL", "NetBIOS", "LDAP", "Portmap"]:
+        num = 8021
+        if kind == "Portmap":
+            num = 8022
+        num = min(num, len(df_day_1_mal[df_day_1_mal["Label"] == kind]))
+        df_label = df_day_1_mal[df_day_1_mal["Label"] == kind].head(n=num).copy(deep=True)
+        df_day_1_mal = df_day_1_mal[df_day_1_mal["Label"] != kind]
+        df_day_1_mal = pd.concat([df_day_1_mal, df_label])
+    
+    print(df_day_1_mal['Label'].value_counts())
     df_day_1_mal.to_csv("dataset_filtered2/Day1/day1_attack.csv", encoding='utf-8', index=False)
     print()
 
