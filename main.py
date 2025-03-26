@@ -1,4 +1,5 @@
 from src.import_dataset import GetDataset
+from src.import_dataset_alt import GetDataset2017
 from src.dataset_split import SplitDataset
 from src.wgan.linear_wgan import TrainLinear
 from src.wgan.self_attention_wgan import TrainSelfAttention, RunModelSelfAttention
@@ -49,18 +50,26 @@ def main():
     if DATASET_FORMAT == "parquet":
         BENIGN = "Benign"
     
-    # Nesse caso já está dividido entre treino e teste, isto é, entre o primeiro e o segundo dia
-    df_day_1 = GetDataset(sys.argv[1], rs, DATASET_FORMAT, filter=False, do_print=False)
-    # Descartando duplicadas
-    df_day_1 = DescartarDuplicatas(df_day_1, do_print=False)
+    args= sys.argv
     
-    df_day_2 = GetDataset(sys.argv[2], rs, DATASET_FORMAT, filter=False, do_print=False)
-    # Descartando duplicadas
-    df_day_2 = DescartarDuplicatas(df_day_2, do_print=False)
-    
-    df_train, df_val, df_test = SplitDataset(df_day_1, df_day_2, rs, DATASET_FORMAT)
+    if args[1] == "2019":
+        # Nesse caso já está dividido entre treino e teste, isto é, entre o primeiro e o segundo dia
+        df_day_1 = GetDataset(args[2], rs, DATASET_FORMAT, filter=False, do_print=False)
+        # Descartando duplicadas
+        df_day_1 = DescartarDuplicatas(df_day_1, do_print=False)
+        
+        df_day_2 = GetDataset(args[3], rs, DATASET_FORMAT, filter=False, do_print=False)
+        # Descartando duplicadas
+        df_day_2 = DescartarDuplicatas(df_day_2, do_print=False)
+        
+        df_train, df_val, df_test = SplitDataset(df_day_1, df_day_2, rs, DATASET_FORMAT)
+    elif args[1] == "2017":
+        df_train = GetDataset2017(args[2], rs, DATASET_FORMAT, filter=False, do_print=False)
+        df_val = GetDataset2017(args[3], rs, DATASET_FORMAT, filter=False, do_print=False)
+        df_test = GetDataset2017(args[4], rs, DATASET_FORMAT, filter=False, do_print=False)
+        args.pop(0)
     # DebugTrainValTest(df_train, df_val, df_test, BENIGN)
-    
+        
     # Essa coluna é importante para a dependência temporal!
     df_train = df_train.sort_values(by = "Timestamp", ignore_index=True)
     df_val = df_val.sort_values(by = "Timestamp", ignore_index=True)
@@ -107,29 +116,29 @@ def main():
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
-    time_window = 52
+    time_window = 77
     dataset_train = IntoDataset(df_train, time_window, normalization)
     dataset_val = IntoDataset(df_val, time_window, normalization)
     dataset_test = IntoDataset(df_test, time_window, normalization)
-    if len(sys.argv) > 3 and sys.argv[3] == "train":
-        if sys.argv[4] == "linear":
+    if len(args) > 4 and args[4] == "train":
+        if args[5] == "linear":
             dataset_train = IntoDatasetNoTime(df_train)
             dataset_val = IntoDatasetNoTime(df_val)
             generator, discriminator = TrainLinear(df_train, 2e-5, 3e-5, 10, df_val, y_val,
                 n_critic=3, optim=torch_optimizer.Yogi, wdd=2e-2, wdg=2e-2, early_stopping=EarlyStopping(3, 0), batch_size=100)
             torch.save(generator, "GeneratorLinear.torch")
             torch.save(discriminator, "DiscriminatorLinear.torch")
-        elif sys.argv[4] == "sa":
+        elif args[5] == "sa":
             RunModelSelfAttention(dataset_train, dataset_val, y_val)
-    elif len(sys.argv) > 3 and sys.argv[3] == "tune":
-        if sys.argv[4] == "sa":
-            if sys.argv[5] == "2layers":
+    elif len(args) > 4 and args[4] == "tune":
+        if args[5] == "sa":
+            if args[6] == "2layers":
                 print("Using 2 self attention blocks")
                 TuneSA(df_train, df_val, y_val, sa_layers=2)
             else:
                 TuneSA(df_train, df_val, y_val)
-    elif len(sys.argv) > 3 and (sys.argv[3] == "val" or sys.argv[3] == "test"):
-        if sys.argv[3] == "val":
+    elif len(args) > 4 and (args[4] == "val" or args[4] == "test"):
+        if args[4] == "val":
             dataset_x = dataset_val
             df_x_label: pd.Series = df_val_label
             y_x = y_val
@@ -141,7 +150,7 @@ def main():
         generator_sa: Generator = torch.load("GeneratorSA.torch", weights_only = False).to(device)
         discriminator_sa = discriminator_sa.eval()
         generator_sa = generator_sa.eval()
-        if len(sys.argv) == 4 or sys.argv[4] == "look":
+        if len(args) == 5 or args[5] == "look":
             preds = discriminate(discriminator_sa, dataset_x, 400)
             for i, val in dataset_x.iterrows():
                 label = df_x_label.loc[i]
@@ -156,8 +165,8 @@ def main():
                 else:
                     print(label, result.item())
                     # print(val_f_old)
-        elif sys.argv[4] == "thresh":
-            X = "Validation" if sys.argv[3] == "val" else "Test"
+        elif args[5] == "thresh":
+            X = "Validation" if args[4] == "val" else "Test"
             # Get predicitons of df_val
             if False:
                 preds = discriminate(discriminator_sa, dataset_x, 35, 1)
@@ -165,7 +174,7 @@ def main():
                 preds = discriminate(discriminator_sa, dataset_x, time_window)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
             thresh = best_thresh["thresholds"]
-            if len(sys.argv) == 5 or sys.argv[5] == "metrics" or sys.argv[5] == "both":
+            if len(args) == 6 or args[6] == "metrics" or args[6] == "both":
                 print(f"{X} AUC: ", metrics.roc_auc_score(y_x, preds))
                 print(f"{X} accuracy: ", metrics.accuracy(y_x, preds > thresh))
                 print(f"{X} precision: ", metrics.precision_score(y_x, preds > thresh))
@@ -173,19 +182,19 @@ def main():
                 print(f"{X} f1: ", metrics.f1_score(y_x, preds > thresh))
                 print("Tpr: ", best_thresh['tpr'])
                 print("Fpr: ", best_thresh['fpr'])
-            if len(sys.argv) > 5:
-                if sys.argv[5] == "matrix" or sys.argv[5] == "both":
-                    metrics.plot_confusion_matrix(y_x, preds > thresh, name=sys.argv[3])
-                if sys.argv[5] == "curve" or sys.argv[5] == "both":
-                    metrics.plot_roc_curve(y_x, preds, name=sys.argv[3])
-                if sys.argv[5] == "attacks":
+            if len(args) > 6:
+                if args[6] == "matrix" or args[6] == "both":
+                    metrics.plot_confusion_matrix(y_x, preds > thresh, name=args[3])
+                if args[6] == "curve" or args[6] == "both":
+                    metrics.plot_roc_curve(y_x, preds, name=args[3])
+                if args[6] == "attacks":
                     for i in ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn", "Portmap"]:
                         idxs = df_x_label[df_x_label==i].index
                         y_x_i = y_x.loc[idxs]
                         preds_i = [preds[i] for i in idxs.tolist()]
                         print(f"{X} accuracy of {i}: ", metrics.accuracy(y_x_i, preds_i > thresh))
                         
-    elif len(sys.argv) > 3 and sys.argv[3] == "minmax":
+    elif len(args) > 4 and args[4] == "minmax":
         # Mapeando endereços ip para valores inteiros
         df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
         df_train["Destination IP"] = df_train["Destination IP"].map(lambda x: int(IPv4Address(x)))
