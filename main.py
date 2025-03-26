@@ -182,13 +182,18 @@ def main():
                 print(f"{X} f1: ", metrics.f1_score(y_x, preds > thresh))
                 print("Tpr: ", best_thresh['tpr'])
                 print("Fpr: ", best_thresh['fpr'])
+                print()
             if len(args) > 6:
                 if args[6] == "matrix" or args[6] == "both":
-                    metrics.plot_confusion_matrix(y_x, preds > thresh, name=args[3])
+                    metrics.plot_confusion_matrix(y_x, preds > thresh, name=args[4])
                 if args[6] == "curve" or args[6] == "both":
-                    metrics.plot_roc_curve(y_x, preds, name=args[3])
-                if args[6] == "attacks":
-                    for i in ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn", "Portmap"]:
+                    metrics.plot_roc_curve(y_x, preds, name=args[4])
+                if args[6] == "attacks" or args[6] == "both":
+                    if args[4] == "val":
+                        lista_attacks = ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn"]
+                    elif args[4] == "test":
+                        lista_attacks = ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn", "Portmap"]
+                    for i in lista_attacks:
                         idxs = df_x_label[df_x_label==i].index
                         y_x_i = y_x.loc[idxs]
                         preds_i = [preds[i] for i in idxs.tolist()]
