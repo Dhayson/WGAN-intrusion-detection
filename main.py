@@ -109,14 +109,14 @@ def main():
     df_val = df_val.fillna(0)
     df_test = df_test.fillna(0)
     
-    normalization = MeanNormalizeTensor(df_train.mean().to_numpy(dtype=np.float32), df_train.std().to_numpy(dtype=np.float32))
-    # normalization = MinMaxNormalizeTensor(df_train.max().to_numpy(dtype=np.float32), df_train.min().to_numpy(dtype=np.float32))
+    # normalization = MeanNormalizeTensor(df_train.mean().to_numpy(dtype=np.float32), df_train.std().to_numpy(dtype=np.float32))
+    normalization = MinMaxNormalizeTensor(df_train.max().to_numpy(dtype=np.float32), df_train.min().to_numpy(dtype=np.float32))
         
     # Validação: diferenciar entre benignos (0) e ataques (1)
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
-    time_window = 77
+    time_window = 69
     dataset_train = IntoDataset(df_train, time_window, normalization)
     dataset_val = IntoDataset(df_val, time_window, normalization)
     dataset_test = IntoDataset(df_test, time_window, normalization)

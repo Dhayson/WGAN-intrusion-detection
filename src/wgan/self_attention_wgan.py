@@ -62,6 +62,7 @@ class GeneratorSA(Generator):
             )
         self.fc2 = nn.Sequential(
             nn.Linear(internal_dim, int(data_shape[1])),
+            nn.Sigmoid()
         )
         self.flat = nn.Flatten(0)
 
@@ -130,15 +131,15 @@ def TrainSelfAttention(dataset_train: IntoDataset, lrd, lrg, epochs, dataset_val
     return WganTrain(dataset_train, generator, discriminator, lrd, lrg, epochs, dataset_val, y_val, n_critic, clip_value, latent_dim, optim,
               wdd, wdg, early_stopping, dropout, print_each_n, time_window, batch_size, return_auc=return_auc)
 
-# Trial: 23 finished with auc score 0.9998024361260816
-# Parameters: lrd:0.0008730477787369731, lrg:0.00023400595481214907, n_critic:4, clip_value:0.5867108875574036
-# latent_dim:14, optim:<class 'torch.optim.adam.Adam'>, wdd:0.0011377078232607508, wdg:0.008784668261586531, dropout:0.16384217108611598
-# time_window:77, batch_size:5, headsd:48, embedd:96
-# headsg:28, embedg:56
+# Trial: 0 finished with auc score 0.9992838720558266
+# Parameters: lrd:0.000990241863814196, lrg:0.0004892796232976136, n_critic:5, clip_value:0.6063470631438461
+# latent_dim:12, optim:<class 'torch.optim.adam.Adam'>, wdd:0.0011034835450264879, wdg:0.008823486416734845, dropout:0.2800604930604953
+# time_window:69, batch_size:2, headsd:66, embedd:132
+# headsg:20, embedg:60
 def RunModelSelfAttention(dataset_train: IntoDataset, dataset_val: IntoDataset, y_val):
-    generator_sa, discriminator_sa = TrainSelfAttention(dataset_train, lrd=0.0008730477787369731, lrg=0.00023400595481214907, epochs=50, 
-                dataset_val=dataset_val, y_val=y_val, wdd=0.0011377078232607508, wdg=0.008784668261586531, clip_value = 0.5867108875574036, optim=torch.optim.Adam,
-                early_stopping=EarlyStopping(5, 0), dropout=0.16384217108611598, latent_dim=14, batch_size=5, n_critic=4,
-                time_window=77, headsd=48, embedd=96, headsg=28, embedg=56)
+    generator_sa, discriminator_sa = TrainSelfAttention(dataset_train, lrd=0.000990241863814196, lrg=0.0004892796232976136, epochs=50, 
+                dataset_val=dataset_val, y_val=y_val, wdd=0.0011034835450264879, wdg=0.008823486416734845, clip_value = 0.6063470631438461, optim=torch.optim.Adam,
+                early_stopping=EarlyStopping(5, 0), dropout=0.2800604930604953, latent_dim=12, batch_size=2, n_critic=5,
+                time_window=69, headsd=66, embedd=132, headsg=20, embedg=60)
     torch.save(generator_sa, "GeneratorSA.torch")
     torch.save(discriminator_sa, "DiscriminatorSA.torch")
