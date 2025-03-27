@@ -5,8 +5,10 @@ from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 from src.wgan.lstm_wgan import TrainLSTM
 from src.wgan.linear_wgan import TrainLinear
 from src.wgan.self_attention_wgan import RunModelSelfAttention2019, RunModelSelfAttention2017
+from src.wgan.TCN_train import RunModelTCN2019, RunModelTCN2017
 from src.tuning import TuneSA
 from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
+from src.wgan.TCN_wgan import discriminate as discriminateTCN
 import src.metrics as metrics
 import sys
 import numpy as np
@@ -143,12 +145,18 @@ def main():
             elif dataset_kind == "2017":
                 print("Using CIC-IDS-2017")
                 RunModelSelfAttention2017(dataset_train, dataset_val, y_val)
-        elif sys.argv[4] == "lstm":
+        elif sys.argv[5] == "lstm":
             generator, discriminator = TrainLSTM(df_train, 2e-4, 1e-4, 10, df_val, y_val, wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
                 early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64, n_critic=4, time_window=80,
                 internal_d=240, internal_g=240)
-            torch.save(generator, "Generator.torch")
-            torch.save(discriminator, "Discriminator.torch")
+            torch.save(generator, "GeneratorLSTM.torch")
+            torch.save(discriminator, "DiscriminatorLSTM.torch")
+        elif sys.argv[5] == "tcn":
+            if dataset_kind == "2019":
+                RunModelTCN2019()
+            elif dataset_kind == "2017":
+                print("Using CIC-IDS-2017")
+                RunModelTCN2017()
     elif len(args) > 4 and args[4] == "tune":
         if args[5] == "sa":
             if args[6] == "2layers":
@@ -158,16 +166,21 @@ def main():
                 TuneSA(df_train, df_val, y_val)
     elif len(args) > 4 and (args[4] == "val" or args[4] == "test"):
         if args[4] == "val":
+            df_x = df_val
             dataset_x = dataset_val
             df_x_label: pd.Series = df_val_label
             y_x = y_val
         else:
+            df_x = df_test
             dataset_x = dataset_test
             df_x_label: pd.Series = df_test_label
             y_x = y_test
         if args[-1] == "sa":
             discriminator: Discriminator = torch.load("DiscriminatorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
             generator: Generator = torch.load("GeneratorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
+        if args[-1] == "tcn":
+            discriminator: Discriminator = torch.load("DiscriminatorTCN.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator: Generator = torch.load("GeneratorTCN.torch", weights_only = False, map_location=torch.device(device)).to(device)
         elif args[-1] == "linear":
             discriminator: Discriminator = torch.load("DiscriminatorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
             generator: Generator = torch.load("GeneratorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
@@ -191,8 +204,8 @@ def main():
         elif args[5] == "thresh":
             X = "Validation" if args[4] == "val" else "Test"
             # Get predicitons of df_val
-            if False:
-                preds = discriminate(discriminator, dataset_x, 35, 1)
+            if args[-1] == "tcn":
+                preds = discriminateTCN(discriminator, dataset_x, time_window=40)
             else:
                 preds = discriminate(discriminator, dataset_x, time_window)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
