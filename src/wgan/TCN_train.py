@@ -98,7 +98,7 @@ def RunModelTCN2019():
         num_channels = 64
         num_layers = 3
         batch_size = 128
-        epochs = 1
+        epochs = 50
         
         generator, discriminator = TrainTCN(
             df_train,
@@ -295,7 +295,7 @@ def RunModelTCN2017():
         print("Entrando no modo de treinamento TCN...")
         latent_dim = 30
         batch_size = 32
-        epochs = 1
+        epochs = 50
         set_seed(RANDOM_SEED)
         generator, discriminator = TrainTCN(
             df_train_norm,
