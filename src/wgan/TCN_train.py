@@ -165,9 +165,9 @@ def RunModelTCN2019():
             )
             preds = discriminate(disc, dataset_val, time_window=time_window, batch_size=400, device=device)
             auc = metrics.roc_auc_score(y_val_window, preds)
-            return 1 - auc  # queremos maximizar AUC, logo minimizamos 1 - AUC
+            return auc
         
-        study = optuna.create_study(direction="minimize")
+        study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=5)
         print("Melhor trial:")
         print("Valor objetivo (1 - AUC):", study.best_trial.value)
