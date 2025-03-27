@@ -51,6 +51,7 @@ def main():
         BENIGN = "Benign"
     
     args= sys.argv
+    dataset_kind = args[1]
     
     if args[1] == "2019":
         # Nesse caso já está dividido entre treino e teste, isto é, entre o primeiro e o segundo dia
@@ -132,9 +133,10 @@ def main():
             torch.save(generator, "GeneratorLinear.torch")
             torch.save(discriminator, "DiscriminatorLinear.torch")
         elif args[5] == "sa":
-            if args[1] == "2019":
+            if dataset_kind == "2019":
                 RunModelSelfAttention2019(dataset_train, dataset_val, y_val)
-            if args[1] == "2017":
+            elif dataset_kind == "2017":
+                print("Using CIC-IDS-2017")
                 RunModelSelfAttention2017(dataset_train, dataset_val, y_val)
     elif len(args) > 4 and args[4] == "tune":
         if args[5] == "sa":
@@ -195,10 +197,26 @@ def main():
                 if args[6] == "curve" or args[6] == "both":
                     metrics.plot_roc_curve(y_x, preds, name=args[4])
                 if args[6] == "attacks" or args[6] == "both":
-                    if args[4] == "val":
-                        lista_attacks = ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn"]
-                    elif args[4] == "test":
-                        lista_attacks = ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn", "Portmap"]
+                    if dataset_kind == "2019":
+                        if args[4] == "val":
+                            lista_attacks = ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn"]
+                        elif args[4] == "test":
+                            lista_attacks = ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn", "Portmap"]
+                    elif dataset_kind == "2017":
+                        if args[4] == "val":
+                            lista_attacks = [
+                                "DoS Hulk",
+                                "DoS GoldenEye",
+                                "DoS slowloris",
+                                "DoS Slowhttptest",
+                                "Heartbleed",
+                            ]
+                        elif args[4] == "test":
+                            lista_attacks = [
+                                "Bot",
+                                "PortScan",
+                                "DDoS"
+                            ]
                     for i in lista_attacks:
                         idxs = df_x_label[df_x_label==i].index
                         y_x_i = y_x.loc[idxs]
