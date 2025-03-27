@@ -157,6 +157,13 @@ def main():
             elif dataset_kind == "2017":
                 print("Using CIC-IDS-2017")
                 RunModelTCN2017()
+    elif len(args) > 4 and args[4] == "optuna":
+        if sys.argv[5] == "tcn":
+            if dataset_kind == "2019":
+                RunModelTCN2019()
+            elif dataset_kind == "2017":
+                print("Using CIC-IDS-2017")
+                RunModelTCN2017()
     elif len(args) > 4 and args[4] == "tune":
         if args[5] == "sa":
             if args[6] == "2layers":

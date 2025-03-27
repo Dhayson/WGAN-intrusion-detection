@@ -122,7 +122,7 @@ def TrainTCN(df_train: pd.DataFrame,
     import time
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # Cria dataset de treino (janelas temporais)
-    dataset_train = IntoDataset(df_train, time_window=time_window)
+    dataset_train = TimeWindowDataset(df_train, time_window=time_window)
     dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
     generator = TCNGenerator(latent_dim, output_dim, num_channels, num_layers, dropout=dropout)

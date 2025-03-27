@@ -35,6 +35,7 @@ def RunModelTCN2019():
     BENIGN = "BENIGN"
     if DATASET_FORMAT == "parquet":
         BENIGN = "Benign"
+    set_seed(RANDOM_SEED)
     
     # Carrega os datasets e remove duplicatas
     df_day_1 = GetDataset(path_day1, rs, DATASET_FORMAT, filter=False, do_print=False).drop_duplicates()
