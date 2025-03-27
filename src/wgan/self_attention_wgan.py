@@ -136,10 +136,24 @@ def TrainSelfAttention(dataset_train: IntoDataset, lrd, lrg, epochs, dataset_val
 # latent_dim:12, optim:<class 'torch.optim.adam.Adam'>, wdd:0.0011034835450264879, wdg:0.008823486416734845, dropout:0.2800604930604953
 # time_window:69, batch_size:2, headsd:66, embedd:132
 # headsg:20, embedg:60
-def RunModelSelfAttention(dataset_train: IntoDataset, dataset_val: IntoDataset, y_val):
+def RunModelSelfAttention2019(dataset_train: IntoDataset, dataset_val: IntoDataset, y_val):
     generator_sa, discriminator_sa = TrainSelfAttention(dataset_train, lrd=0.000990241863814196, lrg=0.0004892796232976136, epochs=50, 
                 dataset_val=dataset_val, y_val=y_val, wdd=0.0011034835450264879, wdg=0.008823486416734845, clip_value = 0.6063470631438461, optim=torch.optim.Adam,
                 early_stopping=EarlyStopping(5, 0), dropout=0.2800604930604953, latent_dim=12, batch_size=2, n_critic=5,
                 time_window=69, headsd=66, embedd=132, headsg=20, embedg=60)
+    torch.save(generator_sa, "GeneratorSA.torch")
+    torch.save(discriminator_sa, "DiscriminatorSA.torch")
+    
+
+# Trial: 2 finished with auc score 0.9719520610724199
+# Parameters: lrd:0.0014838446689901075, lrg:0.0004927052176484955, n_critic:7, clip_value:0.6218987845482782
+# latent_dim:14, optim:<class 'torch.optim.adam.Adam'>, wdd:0.0010562643134023315, wdg:0.009849087440102025, dropout:0.25550529714759485
+# time_window:80, batch_size:9, headsd:44, embedd:176
+# headsg:20, embedg:40
+def RunModelSelfAttention2017(dataset_train: IntoDataset, dataset_val: IntoDataset, y_val):
+    generator_sa, discriminator_sa = TrainSelfAttention(dataset_train, lrd=0.0014838446689901075, lrg=0.0004927052176484955, epochs=50, 
+                dataset_val=dataset_val, y_val=y_val, wdd=0.0010562643134023315, wdg=0.009849087440102025, clip_value = 0.6218987845482782, optim=torch.optim.Adam,
+                early_stopping=EarlyStopping(5, 0), dropout=0.25550529714759485, latent_dim=14, batch_size=9, n_critic=7,
+                time_window=80, headsd=44, embedd=176, headsg=20, embedg=40)
     torch.save(generator_sa, "GeneratorSA.torch")
     torch.save(discriminator_sa, "DiscriminatorSA.torch")

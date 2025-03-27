@@ -2,7 +2,7 @@ from src.import_dataset import GetDataset
 from src.import_dataset_alt import GetDataset2017
 from src.dataset_split import SplitDataset
 from src.wgan.linear_wgan import TrainLinear
-from src.wgan.self_attention_wgan import TrainSelfAttention, RunModelSelfAttention
+from src.wgan.self_attention_wgan import RunModelSelfAttention2019, RunModelSelfAttention2017
 from src.tuning import TuneSA
 from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 import src.metrics as metrics
@@ -116,7 +116,10 @@ def main():
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
-    time_window = 69
+    if args[1] == "2019":
+        time_window = 69
+    else:
+        time_window = 80
     dataset_train = IntoDataset(df_train, time_window, normalization)
     dataset_val = IntoDataset(df_val, time_window, normalization)
     dataset_test = IntoDataset(df_test, time_window, normalization)
@@ -129,7 +132,10 @@ def main():
             torch.save(generator, "GeneratorLinear.torch")
             torch.save(discriminator, "DiscriminatorLinear.torch")
         elif args[5] == "sa":
-            RunModelSelfAttention(dataset_train, dataset_val, y_val)
+            if args[1] == "2019":
+                RunModelSelfAttention2019(dataset_train, dataset_val, y_val)
+            if args[1] == "2017":
+                RunModelSelfAttention2017(dataset_train, dataset_val, y_val)
     elif len(args) > 4 and args[4] == "tune":
         if args[5] == "sa":
             if args[6] == "2layers":
