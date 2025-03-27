@@ -18,8 +18,6 @@ from src.early_stop import EarlyStopping
 from src.into_dataloader import IntoDataset, IntoDatasetNoTime
 from src.transform import MeanNormalizeTensor, MinMaxNormalizeTensor
 
-# OBS: o dataset completo não cabe no repositório, mas pode ser baixado em http://205.174.165.80/CICDataset/CICDDoS2019/Dataset/CSVs/
-
 def DescartarDuplicatas(dataset: pd.DataFrame, do_print = False):
     initial_len = dataset.shape[0]
     dataset = dataset.drop_duplicates()
