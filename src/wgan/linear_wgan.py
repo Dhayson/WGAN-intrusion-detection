@@ -47,7 +47,7 @@ class DiscriminatorLinear(Discriminator):
         validity = self.model(data)
         return validity
 
-def TrainLinear(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
+def TrainLinear(dataset_train: pd.DataFrame, lrd, lrg, epochs, dataset_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
     print_each_n = 20, time_window = 40, batch_size=5, data_len=40
     ) -> tuple[GeneratorLinear, DiscriminatorLinear]:
@@ -55,8 +55,5 @@ def TrainLinear(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame =
     # Initialize generator and discriminator
     generator = GeneratorLinear(data_shape, latent_dim)
     discriminator = DiscriminatorLinear(data_shape)
-    
-    dataset_train = IntoDatasetNoTime(df_train)
-    dataset_val = IntoDatasetNoTime(df_val)
     return WganTrain(dataset_train, generator, discriminator, lrd, lrg, epochs, dataset_val, y_val, n_critic, clip_value, latent_dim, optim,
               wdd, wdg, early_stopping, dropout, print_each_n, time_window, batch_size)

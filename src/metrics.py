@@ -12,7 +12,7 @@ def best_validation_threshold(y_val, val_anomaly_scores):
     return df_val_roc.loc[0]
 
 def accuracy(y_true, y_pred):
-  tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+  tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0,1]).ravel()
   return (tp+tn)/(tp+tn+fp+fn)
 
 def get_overall_metrics(y_true, y_pred):
