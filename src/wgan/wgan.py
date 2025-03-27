@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import pandas as pd
+import sys
 
 import torch.nn as nn
 import torch
@@ -27,9 +28,10 @@ class Discriminator(nn.Module):
 
 def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: Discriminator, lrd, lrg, epochs, dataset_val: IntoDataset = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
-    print_each_n = 20, time_window = 40, batch_size=5, do_print = False, step_by_step = False) -> tuple[Generator, Discriminator]:
+    print_each_n = 20, time_window = 40, batch_size=5, do_print = False, step_by_step = False, return_auc = False) -> tuple[Generator, Discriminator]:
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
+    best_auc_score = 0;
     data_ex = dataset_train[0]
     # print(data_ex)
     data_shape = data_ex.shape
@@ -114,6 +116,7 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
                         % (epoch+1, epochs, batches_done % len(dataloader_train), len(dataloader_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item()),
                         end=""
                     )
+                    sys.stdout.flush()
                     if do_print and False:
                         print("fake: ", fake_data)
                         print("real: ", real_data)
@@ -130,6 +133,8 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
             best_thresh = metrics.best_validation_threshold(y_val, preds)
             thresh = best_thresh["thresholds"]
             auc_score = roc_auc_score(y_val, preds)
+            if auc_score > best_auc_score:
+                best_auc_score = auc_score
             print("\nValidation accuracy: ", metrics.accuracy(y_val, preds > thresh))
             print("AUC score: ", auc_score, "\n")
             # Mecanismo de early stopping
@@ -141,14 +146,20 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
                     print(f"Total Training time: {end_all-start_all:.3f} seconds")
                     discriminator = torch.load('checkpoint.pt', weights_only = False)
                     generator = torch.load('checkpoint2.pt', weights_only = False)
-                    return generator, discriminator
+                    if return_auc:
+                        return generator, discriminator, best_auc_score
+                    else:
+                        return generator, discriminator
             discriminator.train()
         
     end_all = time.time()
     print(f"Total Training time: {end_all-start_all:.3f} seconds")
     discriminator = torch.load('checkpoint.pt', weights_only = False)
     generator = torch.load('checkpoint2.pt', weights_only = False)
-    return generator, discriminator
+    if return_auc:
+        return generator, discriminator, best_auc_score
+    else:
+        return generator, discriminator
 
 @torch.no_grad
 def discriminate(discriminator: Discriminator, dataset_val: IntoDataset, time_window = 40, batch_size=400) -> list: 
@@ -161,8 +172,9 @@ def discriminate(discriminator: Discriminator, dataset_val: IntoDataset, time_wi
         data = batch.to(device)
         # print(data.shape)
         score = discriminator(data, do_print=False).cpu().detach().numpy()
-        if i%10 == 0:
+        if i%50 == 0:
             print(f"\r[Validating] [Sample {i} / {len(dataloader_val)}] [Score {np.squeeze(np.mean(score[0]))}]", end="")
+            sys.stdout.flush()
         i+=1
         for s in score:
             scores.append(-s)
