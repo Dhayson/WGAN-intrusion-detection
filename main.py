@@ -2,6 +2,7 @@ from src.import_dataset import GetDataset
 from src.import_dataset_alt import GetDataset2017
 from src.dataset_split import SplitDataset
 from src.wgan.linear_wgan import TrainLinear
+from src.wgan.lstm_wgan import TrainLSTM
 from src.wgan.self_attention_wgan import RunModelSelfAttention2019, RunModelSelfAttention2017
 from src.tuning import TuneSA
 from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
@@ -139,6 +140,16 @@ def main():
             elif dataset_kind == "2017":
                 print("Using CIC-IDS-2017")
                 RunModelSelfAttention2017(dataset_train, dataset_val, y_val)
+        elif sys.argv[5] == "lstm":
+            generator, discriminator = TrainLSTM(
+                df_train, 0.00010870300025198446, 0.00028247627584454017, 10, df_val, y_val,
+                wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
+                early_stopping=EarlyStopping(15, 0), latent_dim=10,
+                batch_size=128, n_critic=3, time_window=80,
+                internal_d=512, internal_g=512, clip_value=0.1
+            )
+            torch.save(generator, "GeneratorLSTM.torch")
+            torch.save(discriminator, "DiscriminatorLSTM.torch")
     elif len(args) > 4 and args[4] == "tune":
         if args[5] == "sa":
             if args[6] == "2layers":
@@ -161,6 +172,9 @@ def main():
         elif args[-1] == "linear":
             discriminator: Discriminator = torch.load("DiscriminatorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
             generator: Generator = torch.load("GeneratorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
+        elif args[-1] == "lstm":
+            discriminator: Discriminator = torch.load("DiscriminatorLSTM.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator: Generator = torch.load("GeneratorLSTM.torch", weights_only = False, map_location=torch.device(device)).to(device)
         discriminator = discriminator.eval()
         generator = generator.eval()
         if len(args) == 5 or args[5] == "look":
