@@ -158,23 +158,23 @@ def main():
             df_x_label: pd.Series = df_test_label
             y_x = y_test
         if args[-1] == "sa":
-            discriminator_sa: Discriminator = torch.load("DiscriminatorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
-            generator_sa: Generator = torch.load("GeneratorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            discriminator: Discriminator = torch.load("DiscriminatorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator: Generator = torch.load("GeneratorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
         elif args[-1] == "linear":
-            discriminator_sa: Discriminator = torch.load("DiscriminatorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
-            generator_sa: Generator = torch.load("GeneratorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
-        discriminator_sa = discriminator_sa.eval()
-        generator_sa = generator_sa.eval()
+            discriminator: Discriminator = torch.load("DiscriminatorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator: Generator = torch.load("GeneratorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
+        discriminator = discriminator.eval()
+        generator = generator.eval()
         if len(args) == 5 or args[5] == "look":
-            preds = discriminate(discriminator_sa, dataset_x, 400)
+            preds = discriminate(discriminator, dataset_x, 400)
             for i, val in dataset_x.iterrows():
                 label = df_x_label.loc[i]
                 result = preds[i]
                 if random.randint(0,1) == -1:
                     # Sample noise as generator input
                     z = torch.tensor(np.random.normal(0, 1, (30,)))
-                    gen = generator_sa(z).detach()
-                    result_fake = discriminator_sa(gen)
+                    gen = generator(z).detach()
+                    result_fake = discriminator(gen)
                     print("FAKE", result_fake.item())
                     # print((gen*min_max)+train_min.to_numpy())
                 else:
@@ -184,9 +184,9 @@ def main():
             X = "Validation" if args[4] == "val" else "Test"
             # Get predicitons of df_val
             if False:
-                preds = discriminate(discriminator_sa, dataset_x, 35, 1)
+                preds = discriminate(discriminator, dataset_x, 35, 1)
             else:
-                preds = discriminate(discriminator_sa, dataset_x, time_window)
+                preds = discriminate(discriminator, dataset_x, time_window)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
             thresh = best_thresh["thresholds"]
             if len(args) == 6 or args[6] == "metrics" or args[6] == "both":
