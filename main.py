@@ -121,15 +121,18 @@ def main():
         time_window = 69
     else:
         time_window = 80
-    dataset_train = IntoDataset(df_train, time_window, normalization)
-    dataset_val = IntoDataset(df_val, time_window, normalization)
-    dataset_test = IntoDataset(df_test, time_window, normalization)
+    if args[-1] == "linear":
+        dataset_train = IntoDatasetNoTime(df_train, normalization)
+        dataset_val = IntoDatasetNoTime(df_val, normalization)
+        dataset_test = IntoDatasetNoTime(df_test, normalization)
+    else:
+        dataset_train = IntoDataset(df_train, time_window, normalization)
+        dataset_val = IntoDataset(df_val, time_window, normalization)
+        dataset_test = IntoDataset(df_test, time_window, normalization)
     if len(args) > 4 and args[4] == "train":
         if args[5] == "linear":
-            dataset_train = IntoDatasetNoTime(df_train)
-            dataset_val = IntoDatasetNoTime(df_val)
-            generator, discriminator = TrainLinear(df_train, 2e-5, 3e-5, 10, df_val, y_val,
-                n_critic=3, optim=torch_optimizer.Yogi, wdd=2e-2, wdg=2e-2, early_stopping=EarlyStopping(3, 0), batch_size=100)
+            generator, discriminator = TrainLinear(dataset_train, 2e-5, 3e-5, 10, dataset_val, y_val,
+                n_critic=3, optim=torch_optimizer.Yogi, wdd=2e-2, wdg=2e-2, early_stopping=EarlyStopping(3, 0), batch_size=10)
             torch.save(generator, "GeneratorLinear.torch")
             torch.save(discriminator, "DiscriminatorLinear.torch")
         elif args[5] == "sa":
@@ -154,8 +157,12 @@ def main():
             dataset_x = dataset_test
             df_x_label: pd.Series = df_test_label
             y_x = y_test
-        discriminator_sa: Discriminator = torch.load("DiscriminatorSA.torch", weights_only = False).to(device)
-        generator_sa: Generator = torch.load("GeneratorSA.torch", weights_only = False).to(device)
+        if args[-1] == "sa":
+            discriminator_sa: Discriminator = torch.load("DiscriminatorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator_sa: Generator = torch.load("GeneratorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
+        elif args[-1] == "linear":
+            discriminator_sa: Discriminator = torch.load("DiscriminatorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator_sa: Generator = torch.load("GeneratorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
         discriminator_sa = discriminator_sa.eval()
         generator_sa = generator_sa.eval()
         if len(args) == 5 or args[5] == "look":
