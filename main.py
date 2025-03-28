@@ -162,12 +162,57 @@ def main():
                 print("Using CIC-IDS-2017")
                 RunModelTCN2017()
     elif len(args) > 4 and args[4] == "optuna":
+        import optuna
         if sys.argv[5] == "tcn":
             if dataset_kind == "2019":
                 RunModelTCN2019()
             elif dataset_kind == "2017":
                 print("Using CIC-IDS-2017")
                 RunModelTCN2017()
+        elif sys.argv[5] == "lstm":
+            def objective(trial):
+                lrg = trial.suggest_loguniform("lrg", 1e-4, 1e-3)
+                lrd = trial.suggest_loguniform("lrd", 1e-4, 1e-3)
+                n_critic = trial.suggest_categorical("n_critic", [3, 4, 5, 7])
+                clip_value = trial.suggest_categorical("clip_value", [0.1, 0.5, 1.0])
+                latent_dim = trial.suggest_categorical("latent_dim", [10, 20, 30])
+                internal_dim = trial.suggest_categorical("internal_dim", [240, 400, 512])
+                dropout = trial.suggest_uniform("dropout", 0.1, 0.3)
+                batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
+                epochs = 60
+                generator, discriminator = TrainLSTM(
+                    df_train=df_train,
+                    lrd=lrd, lrg=lrg, epochs=epochs,
+                    df_val=df_val, y_val=y_val,
+                    n_critic=n_critic, clip_value=clip_value,
+                    latent_dim=latent_dim,
+                    optim=torch_optimizer.Yogi,
+                    wdd=1e-2, wdg=1e-2,
+                    early_stopping=EarlyStopping(patience=5, verbose=False),
+                    dropout=dropout,
+                    time_window=80,
+                    batch_size=batch_size,
+                    internal_d=internal_dim,
+                    internal_g=internal_dim,
+                    trial=trial
+                )
+                from src.into_dataloader import IntoDataset
+                dataset_val = IntoDataset(df_val, time_window=80)
+                preds = discriminate(discriminator, dataset_val, time_window=80, batch_size=400)
+                preds = np.mean(np.array(preds), axis=1)
+                auc = metrics.roc_auc_score(y_val, preds)
+                print(f"Trial AUC: {auc}")
+                return auc
+            study = optuna.create_study(
+                direction="maximize",
+                pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=3)
+            )
+            study.optimize(objective, n_trials=50)
+            print("Melhores hiperparâmetros:", study.best_trial.params)
+            print("Melhor AUC:", study.best_trial.value)
+        else:
+            print("A otimização para o modelo", sys.argv[5], "ainda não foi implementada.")
+
     elif len(args) > 4 and args[4] == "tune":
         if args[5] == "sa":
             if args[6] == "2layers":
@@ -272,53 +317,7 @@ def main():
         print(df_train.min())
         print()
         print(df_train.max())
-    elif len(sys.argv) > 3 and sys.argv[3] == "optuna":
-        import optuna
-        model_type = sys.argv[4] if len(sys.argv) > 4 else "lstm"
-        if model_type == "lstm":
-            def objective(trial):
-                lrg = trial.suggest_loguniform("lrg", 1e-4, 1e-3)
-                lrd = trial.suggest_loguniform("lrd", 1e-4, 1e-3)
-                n_critic = trial.suggest_categorical("n_critic", [3, 4, 5, 7])
-                clip_value = trial.suggest_categorical("clip_value", [0.1, 0.5, 1.0])
-                latent_dim = trial.suggest_categorical("latent_dim", [10, 20, 30])
-                internal_dim = trial.suggest_categorical("internal_dim", [240, 400, 512])
-                dropout = trial.suggest_uniform("dropout", 0.1, 0.3)
-                batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
-                epochs = 60
-                generator, discriminator = TrainLSTM(
-                    df_train=df_train,
-                    lrd=lrd, lrg=lrg, epochs=epochs,
-                    df_val=df_val, y_val=y_val,
-                    n_critic=n_critic, clip_value=clip_value,
-                    latent_dim=latent_dim,
-                    optim=torch_optimizer.Yogi,
-                    wdd=1e-2, wdg=1e-2,
-                    early_stopping=EarlyStopping(patience=5, verbose=False),
-                    dropout=dropout,
-                    time_window=80,
-                    batch_size=batch_size,
-                    internal_d=internal_dim,
-                    internal_g=internal_dim,
-                    trial=trial
-                )
-                from src.into_dataloader import IntoDataset
-                dataset_val = IntoDataset(df_val, time_window=80)
-                preds = discriminate(discriminator, dataset_val, time_window=80, batch_size=400)
-                preds = np.mean(np.array(preds), axis=1)
-                auc = metrics.roc_auc_score(y_val, preds)
-                print(f"Trial AUC: {auc}")
-                return auc
-            study = optuna.create_study(
-                direction="maximize",
-                pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=3)
-            )
-            study.optimize(objective, n_trials=50)
-            print("Melhores hiperparâmetros:", study.best_trial.params)
-            print("Melhor AUC:", study.best_trial.value)
-        else:
-            print("A otimização para o modelo", model_type, "ainda não foi implementada.")
-
+        
 
 if __name__ == '__main__':
     main()
