@@ -118,7 +118,7 @@ def main():
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
     if args[1] == "2019":
-        time_window = 69
+        time_window = 77
     else:
         time_window = 80
     if args[-1] == "linear":
