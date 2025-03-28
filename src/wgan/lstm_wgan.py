@@ -167,8 +167,9 @@ def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = N
                 optimizer_G.step()
                 if i % print_each_n == 0:
                     print(
-                        "[Epoch %d/%d] [Batch %d/%d] [D true loss: %f] [D fake loss: %f] [G loss: %f]"
-                        % (epoch+1, epochs, batches_done % len(dataloader_train), len(dataloader_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item())
+                        "\r[Epoch %d/%d] [Batch %d/%d] [D true loss: %f] [D fake loss: %f] [G loss: %f]"
+                        % (epoch+1, epochs, batches_done % len(dataloader_train), len(dataloader_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item()),
+                        end=""
                     )
                     if do_print and False:
                         print("fake: ", fake_data)
@@ -178,6 +179,7 @@ def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = N
                         input()
             batches_done += 1
         end = time.time()
+        print()
         print(f"Epoch training time: {end-start:.3f} seconds")
         if df_val is not None and y_val is not None:
             discriminator.eval()

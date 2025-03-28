@@ -151,7 +151,7 @@ def main():
                 wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
                 early_stopping=EarlyStopping(15, 0), latent_dim=10,
                 batch_size=128, n_critic=3, time_window=80,
-                internal_d=512, internal_g=512, clip_value=0.1
+                internal_d=512, internal_g=512, clip_value=0.1, print_each_n=1
             )
             torch.save(generator, "GeneratorLSTM.torch")
             torch.save(discriminator, "DiscriminatorLSTM.torch")
