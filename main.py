@@ -121,10 +121,14 @@ def main():
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
-    if args[1] == "2019":
-        time_window = 77
-    else:
+    if args[-1] == "sa":
+        if args[1] == "2019":
+            time_window = 77
+        else:
+            time_window = 80
+    elif args[-1] == "lstm":
         time_window = 80
+        
     if args[-1] == "linear":
         dataset_train = IntoDatasetNoTime(df_train, normalization)
         dataset_val = IntoDatasetNoTime(df_val, normalization)
