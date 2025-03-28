@@ -292,7 +292,7 @@ def RunModelTCN2017():
             optim=torch.optim.RMSprop,
             wdd=1e-2,
             wdg=1e-2,
-            early_stopping=EarlyStopping(5, 0),
+            early_stopping=EarlyStopping(15, 0),
             dropout=0.4674443631751687,
             time_window=time_window,
             batch_size=batch_size,
