@@ -162,13 +162,14 @@ def TrainTCN(df_train: pd.DataFrame,
                 loss_G.backward()
                 optimizer_G.step()
                 if i % print_each_n == 0:
-                    print(f"[Epoch {epoch+1}/{epochs}] [Batch {batches_done % len(dataloader_train)}/{len(dataloader_train)}] "
+                    print(f"\r[Epoch {epoch+1}/{epochs}] [Batch {batches_done % len(dataloader_train)}/{len(dataloader_train)}] "
                           f"[D real: {disc_real.mean().item():.6f}] [D fake: {disc_fake.mean().item():.6f}] "
-                          f"[G loss: {loss_G.item():.6f}]")
+                          f"[G loss: {loss_G.item():.6f}]", end="")
                     if do_print and step_by_step:
                         input("Pressione Enter para continuar...")
             batches_done += 1
         end = time.time()
+        print()
         print(f"Tempo de treinamento da Epoch {epoch+1}: {end - start:.3f} segundos")
         
         if dataset_val is not None and y_val is not None:
