@@ -1,24 +1,27 @@
 from src.import_dataset import GetDataset
+from src.import_dataset_alt import GetDataset2017
 from src.dataset_split import SplitDataset
 from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 from src.wgan.lstm_wgan import TrainLSTM
 from src.wgan.linear_wgan import TrainLinear
-from src.wgan.self_attention_wgan import TrainSelfAttention
+from src.wgan.self_attention_wgan import RunModelSelfAttention2019, RunModelSelfAttention2017
+from src.wgan.TCN_train import RunModelTCN2019, RunModelTCN2017
+from src.tuning import TuneSA
+from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
+from src.wgan.TCN_wgan import discriminate as discriminateTCN
 import src.metrics as metrics
 import sys
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
 from numpy.random import RandomState
 import torch
 import torch_optimizer
 from ipaddress import IPv4Address
-from torch.autograd import Variable
 import random
 from src.early_stop import EarlyStopping
 from optuna.pruners import MedianPruner
+from src.into_dataloader import IntoDataset, IntoDatasetNoTime
+from src.transform import MeanNormalizeTensor, MinMaxNormalizeTensor
 
 
 def DescartarDuplicatas(dataset: pd.DataFrame, do_print=False):
@@ -50,22 +53,33 @@ def main():
     BENIGN = "BENIGN"
     if DATASET_FORMAT == "parquet":
         BENIGN = "Benign"
-
-    # Carrega os datasets (divididos entre dia 1 e dia 2)
-    df_day_1 = GetDataset(sys.argv[1], rs, DATASET_FORMAT, filter=False, do_print=False)
-    df_day_1 = DescartarDuplicatas(df_day_1, do_print=False)
-
-    df_day_2 = GetDataset(sys.argv[2], rs, DATASET_FORMAT, filter=False, do_print=False)
-    df_day_2 = DescartarDuplicatas(df_day_2, do_print=False)
-
-    df_train, df_val, df_test = SplitDataset(df_day_1, df_day_2, rs, DATASET_FORMAT)
+    
+    args= sys.argv
+    dataset_kind = args[1]
+    
+    if args[1] == "2019":
+        # Carrega os datasets (divididos entre dia 1 e dia 2)
+        df_day_1 = GetDataset(args[2], rs, DATASET_FORMAT, filter=False, do_print=False)
+        # Descartando duplicadas
+        df_day_1 = DescartarDuplicatas(df_day_1, do_print=False)
+        
+        df_day_2 = GetDataset(args[3], rs, DATASET_FORMAT, filter=False, do_print=False)
+        # Descartando duplicadas
+        df_day_2 = DescartarDuplicatas(df_day_2, do_print=False)
+        
+        df_train, df_val, df_test = SplitDataset(df_day_1, df_day_2, rs, DATASET_FORMAT)
+    elif args[1] == "2017":
+        df_train = GetDataset2017(args[2], rs, DATASET_FORMAT, filter=False, do_print=False)
+        df_val = GetDataset2017(args[3], rs, DATASET_FORMAT, filter=False, do_print=False)
+        df_test = GetDataset2017(args[4], rs, DATASET_FORMAT, filter=False, do_print=False)
+        args.pop(0)
     # DebugTrainValTest(df_train, df_val, df_test, BENIGN)
-
-    # Ordena os dados pelo Timestamp para preservar a dependência temporal
-    df_train = df_train.sort_values(by="Timestamp", ignore_index=True)
-    df_val = df_val.sort_values(by="Timestamp", ignore_index=True)
-    df_test = df_test.sort_values(by="Timestamp", ignore_index=True)
-
+        
+    # Essa coluna é importante para a dependência temporal!
+    df_train = df_train.sort_values(by = "Timestamp", ignore_index=True)
+    df_val = df_val.sort_values(by = "Timestamp", ignore_index=True)
+    df_test = df_test.sort_values(by = "Timestamp", ignore_index=True)
+    
     df_train_label = df_train["Label"]
     df_val_label = df_val["Label"]
     df_test_label = df_test["Label"]
@@ -91,41 +105,47 @@ def main():
 
     train_min = df_train.min().astype("float64")
     train_max = df_train.max().astype("float64")
-    min_max = (train_max - train_min).to_numpy()
-
+    # min_max = (train_max - train_min).to_numpy()
+    
     # Normalização
-    df_train = (df_train - df_train.min()) / (df_train.max() - df_train.min())
     df_train = df_train.fillna(0)
-    df_val = (df_val - train_min) / (min_max)
     df_val = df_val.fillna(0)
-    df_test = (df_test - train_min) / (min_max)
     df_test = df_test.fillna(0)
+    
+    # normalization = MeanNormalizeTensor(df_train.mean().to_numpy(dtype=np.float32), df_train.std().to_numpy(dtype=np.float32))
+    normalization = MinMaxNormalizeTensor(df_train.max().to_numpy(dtype=np.float32), df_train.min().to_numpy(dtype=np.float32))
+        
+    # Validação: diferenciar entre benignos (0) e ataques (1)
 
     # Converte os rótulos para 0 (BENIGN) e 1 (ataque)
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
-
-    if len(sys.argv) > 3 and sys.argv[3] == "train":
-        if sys.argv[4] == "linear":
-            generator, discriminator = TrainLinear(
-                df_train, 2e-5, 3e-5, 10, df_val, y_val,
-                n_critic=3, optim=torch_optimizer.Yogi,
-                wdd=2e-2, wdg=2e-2,
-                early_stopping=EarlyStopping(3, 0), batch_size=100
-            )
+    
+    if args[1] == "2019":
+        time_window = 77
+    else:
+        time_window = 80
+    if args[-1] == "linear":
+        dataset_train = IntoDatasetNoTime(df_train, normalization)
+        dataset_val = IntoDatasetNoTime(df_val, normalization)
+        dataset_test = IntoDatasetNoTime(df_test, normalization)
+    else:
+        dataset_train = IntoDataset(df_train, time_window, normalization)
+        dataset_val = IntoDataset(df_val, time_window, normalization)
+        dataset_test = IntoDataset(df_test, time_window, normalization)
+    if len(args) > 4 and args[4] == "train":
+        if args[5] == "linear":
+            generator, discriminator = TrainLinear(dataset_train, 2e-5, 3e-5, 10, dataset_val, y_val,
+                n_critic=3, optim=torch_optimizer.Yogi, wdd=2e-2, wdg=2e-2, early_stopping=EarlyStopping(3, 0), batch_size=10)
             torch.save(generator, "GeneratorLinear.torch")
             torch.save(discriminator, "DiscriminatorLinear.torch")
-        elif sys.argv[4] == "sa":
-            generator_sa, discriminator_sa = TrainSelfAttention(
-                df_train, 5e-5, 5e-5, 10, df_val, y_val,
-                wdd=6e-4, wdg=9e-4, clip_value=0.9, optim=torch_optimizer.Yogi,
-                early_stopping=EarlyStopping(3, 0), latent_dim=10,
-                batch_size=128, n_critic=5, time_window=40,
-                headsd=40, embedd=240, headsg=40, embedg=240
-            )
-            torch.save(generator_sa, "Generator.torch")
-            torch.save(discriminator_sa, "Discriminator.torch")
-        elif sys.argv[4] == "lstm":
+        elif args[5] == "sa":
+            if dataset_kind == "2019":
+                RunModelSelfAttention2019(dataset_train, dataset_val, y_val)
+            elif dataset_kind == "2017":
+                print("Using CIC-IDS-2017")
+                RunModelSelfAttention2017(dataset_train, dataset_val, y_val)
+        elif sys.argv[5] == "lstm":
             generator, discriminator = TrainLSTM(
                 df_train, 0.00010870300025198446, 0.00028247627584454017, 10, df_val, y_val,
                 wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
@@ -133,41 +153,78 @@ def main():
                 batch_size=128, n_critic=3, time_window=80,
                 internal_d=512, internal_g=512, clip_value=0.1
             )
-            torch.save(generator, "Generator.torch")
-            torch.save(discriminator, "Discriminator.torch")
-    elif len(sys.argv) > 3 and (sys.argv[3] == "val" or sys.argv[3] == "test"):
-        if sys.argv[3] == "val":
+            torch.save(generator, "GeneratorLSTM.torch")
+            torch.save(discriminator, "DiscriminatorLSTM.torch")
+        elif sys.argv[5] == "tcn":
+            if dataset_kind == "2019":
+                RunModelTCN2019()
+            elif dataset_kind == "2017":
+                print("Using CIC-IDS-2017")
+                RunModelTCN2017()
+    elif len(args) > 4 and args[4] == "optuna":
+        if sys.argv[5] == "tcn":
+            if dataset_kind == "2019":
+                RunModelTCN2019()
+            elif dataset_kind == "2017":
+                print("Using CIC-IDS-2017")
+                RunModelTCN2017()
+    elif len(args) > 4 and args[4] == "tune":
+        if args[5] == "sa":
+            if args[6] == "2layers":
+                print("Using 2 self attention blocks")
+                TuneSA(df_train, df_val, y_val, sa_layers=2)
+            else:
+                TuneSA(df_train, df_val, y_val)
+    elif len(args) > 4 and (args[4] == "val" or args[4] == "test"):
+        if args[4] == "val":
             df_x = df_val
-            df_x_label = df_val_label
+            dataset_x = dataset_val
+            df_x_label: pd.Series = df_val_label
             y_x = y_val
         else:
             df_x = df_test
-            df_x_label = df_test_label
+            dataset_x = dataset_test
+            df_x_label: pd.Series = df_test_label
             y_x = y_test
-
-        discriminator_sa: Discriminator = torch.load("Discriminator.torch", weights_only=False).to(device)
-        generator_sa: Generator = torch.load("Generator.torch", weights_only=False).to(device)
-        discriminator_sa.eval()
-        generator_sa.eval()
-
-        if len(sys.argv) == 4 or sys.argv[4] == "look":
-            from src.into_dataloader import IntoDataset
-            dataset_test = IntoDataset(df_x, time_window=40)
-            scores = discriminate(discriminator_sa, dataset_test, time_window=40, batch_size=400)
-            # Para cada amostra, agrega os scores (por exemplo, média)
-            for i, row in df_x.iterrows():
-                # Calcula a média dos scores para a amostra i
-                sample_score = np.mean(scores[i])
-                print(df_x_label.loc[i], sample_score)
-        elif sys.argv[4] == "thresh":
-            from src.into_dataloader import IntoDataset
-            dataset_test = IntoDataset(df_x, time_window=40)
-            scores = discriminate(discriminator_sa, dataset_test, time_window=40, batch_size=400)
-            preds = np.array(scores).reshape(len(scores), -1).mean(axis=1)
+        if args[-1] == "sa":
+            discriminator: Discriminator = torch.load("DiscriminatorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator: Generator = torch.load("GeneratorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
+        if args[-1] == "lstm":
+            discriminator: Discriminator = torch.load("DiscriminatorLSTM.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator: Generator = torch.load("GeneratorLSTM.torch", weights_only = False, map_location=torch.device(device)).to(device)
+        if args[-1] == "tcn":
+            discriminator: Discriminator = torch.load("DiscriminatorTCN.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator: Generator = torch.load("GeneratorTCN.torch", weights_only = False, map_location=torch.device(device)).to(device)
+        elif args[-1] == "linear":
+            discriminator: Discriminator = torch.load("DiscriminatorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator: Generator = torch.load("GeneratorLinear.torch", weights_only = False, map_location=torch.device(device)).to(device)
+        discriminator = discriminator.eval()
+        generator = generator.eval()
+        if len(args) == 5 or args[5] == "look":
+            preds = discriminate(discriminator, dataset_x, 400)
+            for i, val in dataset_x.iterrows():
+                label = df_x_label.loc[i]
+                result = preds[i]
+                if random.randint(0,1) == -1:
+                    # Sample noise as generator input
+                    z = torch.tensor(np.random.normal(0, 1, (30,)))
+                    gen = generator(z).detach()
+                    result_fake = discriminator(gen)
+                    print("FAKE", result_fake.item())
+                    # print((gen*min_max)+train_min.to_numpy())
+                else:
+                    print(label, result.item())
+                    # print(val_f_old)
+        elif args[5] == "thresh":
+            X = "Validation" if args[4] == "val" else "Test"
+            # Get predicitons of df_val
+            if args[-1] == "tcn":
+                preds = discriminateTCN(discriminator, dataset_x, time_window=40)
+            else:
+                preds = discriminate(discriminator, dataset_x, time_window)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
             thresh = best_thresh["thresholds"]
-            if len(sys.argv) == 5 or sys.argv[5] in ("metrics", "both"):
-                X = "Validation" if sys.argv[3] == "val" else "Test"
+            if len(args) == 6 or args[6] == "metrics" or args[6] == "both":
                 print(f"{X} AUC: ", metrics.roc_auc_score(y_x, preds))
                 print(f"{X} accuracy: ", metrics.accuracy(y_x, preds > thresh))
                 print(f"{X} precision: ", metrics.precision_score(y_x, preds > thresh))
@@ -175,12 +232,41 @@ def main():
                 print(f"{X} f1: ", metrics.f1_score(y_x, preds > thresh))
                 print("Tpr: ", best_thresh['tpr'])
                 print("Fpr: ", best_thresh['fpr'])
-            if len(sys.argv) > 5:
-                if sys.argv[5] in ("matrix", "both"):
-                    metrics.plot_confusion_matrix(y_x, preds > thresh, name=sys.argv[3])
-                if sys.argv[5] in ("curve", "both"):
-                    metrics.plot_roc_curve(y_x, preds, name=sys.argv[3])
-    elif len(sys.argv) > 3 and sys.argv[3] == "minmax":
+                print()
+            if len(args) > 6:
+                if args[6] == "matrix" or args[6] == "both":
+                    metrics.plot_confusion_matrix(y_x, preds > thresh, name=args[4])
+                if args[6] == "curve" or args[6] == "both":
+                    metrics.plot_roc_curve(y_x, preds, name=args[4])
+                if args[6] == "attacks" or args[6] == "both":
+                    if dataset_kind == "2019":
+                        if args[4] == "val":
+                            lista_attacks = ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn"]
+                        elif args[4] == "test":
+                            lista_attacks = ["BENIGN", "LDAP", "MSSQL", "NetBIOS", "UDPLag", "UDP", "Syn", "Portmap"]
+                    elif dataset_kind == "2017":
+                        if args[4] == "val":
+                            lista_attacks = [
+                                "DoS Hulk",
+                                "DoS GoldenEye",
+                                "DoS slowloris",
+                                "DoS Slowhttptest",
+                                "Heartbleed",
+                            ]
+                        elif args[4] == "test":
+                            lista_attacks = [
+                                "Bot",
+                                "PortScan",
+                                "DDoS"
+                            ]
+                    for i in lista_attacks:
+                        idxs = df_x_label[df_x_label==i].index
+                        y_x_i = y_x.loc[idxs]
+                        preds_i = [preds[i] for i in idxs.tolist()]
+                        print(f"{X} accuracy of {i}: ", metrics.accuracy(y_x_i, preds_i > thresh))
+                        
+    elif len(args) > 4 and args[4] == "minmax":
+        # Mapeando endereços ip para valores inteiros
         df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
         df_train["Destination IP"] = df_train["Destination IP"].map(lambda x: int(IPv4Address(x)))
         print(df_train.min())
