@@ -192,8 +192,8 @@ def TrainTCN(df_train: pd.DataFrame,
                 early_stopping(auc, discriminator, generator)
                 if early_stopping.early_stop:
                     print(f"Treinamento interrompido pelo early stopping na Epoch {epoch+1}")
-                    generator = torch.load(early_stopping.path2, map_location=device)
-                    discriminator = torch.load(early_stopping.path, map_location=device)
+                    generator = torch.load(early_stopping.path2, weights_only=False, map_location=device)
+                    discriminator = torch.load(early_stopping.path, weights_only=False, map_location=device)
                     return generator, discriminator
             discriminator.train()
     
