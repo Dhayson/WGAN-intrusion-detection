@@ -122,7 +122,7 @@ def TrainTCN(df_train: pd.DataFrame,
     import time
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # Cria dataset de treino (janelas temporais)
-    dataset_train = TimeWindowDataset(df_train, time_window=time_window)
+    dataset_train = IntoDataset(df_train, time_window=time_window)
     dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
     generator = TCNGenerator(latent_dim, output_dim, num_channels, num_layers, dropout=dropout)
@@ -173,14 +173,7 @@ def TrainTCN(df_train: pd.DataFrame,
         
         if dataset_val is not None and y_val is not None:
             discriminator.eval()
-            val_dataset = IntoDataset(dataset_val, time_window=time_window)
-            val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=400, shuffle=False)
-            preds = []
-            with torch.no_grad():
-                for batch_val in val_loader:
-                    batch_val = batch_val.to(device)
-                    out = discriminator(batch_val).cpu().numpy()
-                    preds.extend([-s for s in out])
+            preds = discriminate(discriminator, IntoDataset(dataset_val, time_window=time_window), device=device)
             try:
                 auc = metrics.roc_auc_score(y_val, preds)
             except Exception as e:

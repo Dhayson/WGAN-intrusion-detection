@@ -14,6 +14,7 @@ from src.dataset_split import SplitDataset
 import src.metrics as metrics
 from src.early_stop import EarlyStopping
 from src.wgan.TCN_wgan import *
+import optuna
 
 # ------------------------------------------------------------
 # Main com modos 'train', 'val', 'test' e 'optuna'
@@ -172,28 +173,6 @@ def RunModelTCN2019():
         print("Melhor trial:")
         print("Valor objetivo (1 - AUC):", study.best_trial.value)
         print("Parâmetros:", study.best_trial.params)
-    
-    elif mode == "val" or mode == "test":
-        if mode == "val":
-            df_x = df_val
-            y_x = y_val_window
-        else:
-            df_x = df_test
-            y_x = y_test_window
-        print("Entrando no modo de validação/teste TCN...")
-        discriminator_model = torch.load("DiscriminatorTCN.torch", weights_only=False, map_location=device)
-        generator_model = torch.load("GeneratorTCN.torch", weights_only=False, map_location=device)
-        discriminator_model.eval()
-        generator_model.eval()
-        
-        preds = discriminate(discriminator_model, df_x, time_window=time_window, batch_size=400, device=device)
-        best_thresh = metrics.best_validation_threshold(y_x, preds)
-        thresh = best_thresh["thresholds"]
-        auc = metrics.roc_auc_score(y_x, preds)
-        acc = metrics.accuracy(y_x, np.array(preds) > thresh)
-        print(f"AUC = {auc:.4f}, Accuracy = {acc:.4f}")
-        print("Threshold:", thresh)
-    
     else:
         print("Nenhum modo válido selecionado. Use 'train tcn', 'optuna tcn', 'val tcn' ou 'test tcn'.")
 
@@ -224,7 +203,7 @@ def RunModelTCN2017():
     model_type = sys.argv[5].lower()  # para TCN, "tcn"
     
     RANDOM_SEED = 5
-    set_seed(RANDOM_SEED)
+    # set_seed(RANDOM_SEED)
     rs = RandomState(RANDOM_SEED)
     DATASET_FORMAT = "csv"
     
@@ -294,17 +273,17 @@ def RunModelTCN2017():
     
     if mode == "train" and model_type == "tcn":
         print("Entrando no modo de treinamento TCN...")
-        latent_dim = 30
-        batch_size = 32
+        latent_dim = 19
+        batch_size = 16
         epochs = 50
-        set_seed(RANDOM_SEED)
+        # set_seed(RANDOM_SEED)
         generator, discriminator = TrainTCN(
             df_train_norm,
             latent_dim=latent_dim,
             output_dim=df_train_norm.shape[1],
             input_dim=df_train_norm.shape[1],
-            lrd=2e-4,
-            lrg=1e-4,
+            lrd=9.48030648267979e-05,
+            lrg=0.00016729683536668868,
             epochs=epochs,
             dataset_val=df_val_norm,
             y_val=y_val_window,
@@ -314,10 +293,10 @@ def RunModelTCN2017():
             wdd=1e-2,
             wdg=1e-2,
             early_stopping=EarlyStopping(5, 0),
-            dropout=0.2,
+            dropout=0.4674443631751687,
             time_window=time_window,
             batch_size=batch_size,
-            num_channels=32,
+            num_channels=58,
             num_layers=1,
             do_print=True
         )
@@ -404,48 +383,6 @@ def RunModelTCN2017():
         )
         torch.save(gen, "GeneratorTCN.torch")
         torch.save(disc, "DiscriminatorTCN.torch")
-    
-    elif mode == "val" and model_type=="tcn":
-        print("Entrando no modo de validação TCN...")
-        disc_model = torch.load("DiscriminatorTCN.torch", weights_only=False, map_location=device).eval()
-        scores = discriminate(disc_model, df_val_norm, time_window=time_window, batch_size=400, device=device)
-        
-        y_val_window = lbl_val.iloc[:].apply(lambda c: 0 if c.strip().upper()=="BENIGN" else 1).to_numpy()
-        metrics.plot_roc_curve(y_val_window, scores, name="val")
-        auc = metrics.roc_auc_score(y_val_window, scores)
-        thresh = metrics.best_validation_threshold(y_val_window, scores)["thresholds"]
-        acc = metrics.accuracy(y_val_window, np.array(scores) > thresh)
-        print(f"VAL - AUC: {auc:.4f}, Accuracy: {acc:.4f}")
-        metrics.plot_confusion_matrix(y_val_window, np.array(scores) > thresh, name="val")
-        
-        # Acurácia por ataque (sem tempo)
-        attack_results = compute_accuracy_by_attack(df_wed_orig, scores, time_window, thresh)
-        print("\nAcurácia por ataque:")
-        for attack_type, res in attack_results.items():
-            print(f"Tipo: {attack_type}")
-            print(f"  - Número de exemplos: {res['num_examples']}")
-            print(f"  - Acurácia média: {res['accuracy']:.4f}")
-    
-    elif mode == "test" and model_type=="tcn":
-        print("Entrando no modo de teste TCN...")
-        disc_model = torch.load("DiscriminatorTCN.torch", weights_only=False, map_location=device).eval()
-        scores = discriminate(disc_model, df_test_norm, time_window=time_window, batch_size=400, device=device)
-        
-        y_test_window = lbl_test.iloc[:].apply(lambda c: 0 if c.strip().upper()=="BENIGN" else 1).to_numpy()
-        metrics.plot_roc_curve(y_test_window, scores, name="test")
-        auc = metrics.roc_auc_score(y_test_window, scores)
-        thresh = metrics.best_validation_threshold(y_test_window, scores)["thresholds"]
-        acc = metrics.accuracy(y_test_window, np.array(scores) > thresh)
-        print(f"TEST - AUC: {auc:.4f}, Accuracy: {acc:.4f}")
-        metrics.plot_confusion_matrix(y_test_window, np.array(scores) > thresh, name="test")
-        
-        # Acurácia por ataque (sem tempo)
-        attack_results = compute_accuracy_by_attack(df_friday_orig, scores, time_window, thresh)
-        print("\nAcurácia por ataque:")
-        for attack_type, res in attack_results.items():
-            print(f"Tipo: {attack_type}")
-            print(f"  - Número de exemplos: {res['num_examples']}")
-            print(f"  - Acurácia média: {res['accuracy']:.4f}")
     
     else:
         print("Modo inválido. Use 'train', 'optuna', 'val' ou 'test' com 'tcn'.")
