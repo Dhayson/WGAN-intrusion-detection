@@ -1,41 +1,95 @@
+import pandas as pd
 import time
 import numpy as np
-import pandas as pd
-import sys
 
 import torch.nn as nn
 import torch
-import src.metrics as metrics
-from sklearn.metrics import roc_auc_score
 
 from src.early_stop import EarlyStopping
+
+from src.wgan.wgan import Generator, Discriminator
 from src.into_dataloader import IntoDataset
-
-from torch.utils.data import DataLoader
-
 from src.lstm import LSTM
+from torch.utils.data import DataLoader
+from src.wgan.wgan import discriminate
+from src.metrics import roc_auc_score
+import src.metrics as metrics
 
 cuda = True if torch.cuda.is_available() else False
 device = "cuda" if cuda else "cpu"
 
-class Generator(nn.Module):
-    def __init__(self, *args, **kwargs):
-        super(Generator, self).__init__()
+def block_mlp(in_feat, out_feat, leak = 0.0):
+    layers = [nn.Linear(in_feat, out_feat)]
+    layers.append(nn.LeakyReLU(negative_slope=leak, inplace=True))
+    return layers
 
-class Discriminator(nn.Module):
-    def __init__(self, *args, **kwargs):
-        super(Discriminator, self).__init__()
+class GeneratorLSTM(nn.Module):
+    def __init__(self, data_shape, latent_dim, internal_dim, dropout=0.2):
+        super(GeneratorLSTM, self).__init__()
+        self.data_shape = data_shape
+        self.latent_dim = latent_dim
+        
+        # TODO: alterar arquitetura para usar TCN e self attention
+        self.fc1 = nn.Sequential(
+            *block_mlp(latent_dim, internal_dim, leak=0.1),
+        )
+        self.lstm = LSTM(internal_dim, internal_dim, dropout)
+        self.fc2 = nn.Sequential(
+            nn.Linear(internal_dim, int(data_shape[1])),
+            nn.Sigmoid(),
+        )
+        self.flat = nn.Flatten(0)
 
-def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: Discriminator, lrd, lrg, epochs, dataset_val: IntoDataset = None, y_val: pd.Series = None, n_critic = 5, 
+    def forward(self, z):
+        data = self.fc1(z)
+        data = self.lstm(data)
+        data = self.fc2(data)
+        return data
+
+class DiscriminatorLSTM(nn.Module):
+    def __init__(self, data_shape, internal_dim, dropout=0.2):
+        super(DiscriminatorLSTM, self).__init__()
+        self.fc1 = nn.Sequential(
+            *block_mlp(int(data_shape[1]), internal_dim, leak=0.1),
+        )
+        self.lstm = LSTM(internal_dim, internal_dim, dropout)   
+        self.fc2 = nn.Sequential(
+            nn.Linear(internal_dim, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, data, do_print=False):
+        if do_print:
+            print("DISCRIMINATOR")
+            print(data.shape)
+        z1 = self.fc1(data)
+        if do_print:
+            print(z1.shape)
+        za = self.lstm(z1)
+        if do_print:
+            print(za.shape)
+        val = self.fc2(za)
+        if do_print:
+            print(val.shape)
+            print()
+        return val
+    
+def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
-    print_each_n = 20, time_window = 40, batch_size=5, do_print = False, step_by_step = False, return_auc = False) -> tuple[Generator, Discriminator]:
+    print_each_n = 100, time_window = 40, batch_size=5, do_print = False, step_by_step = False, internal_d=400, internal_g=400
+    ) -> tuple[GeneratorLSTM, DiscriminatorLSTM]:
+    dataset_train = IntoDataset(df_train, time_window)
+    dataset_val = IntoDataset(df_val, time_window)
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
-    best_auc_score = 0;
     data_ex = dataset_train[0]
     # print(data_ex)
     data_shape = data_ex.shape
-    # print(data_shape)
+    # print('data_shape', data_shape)
+    
+    # Initialize generator and discriminator
+    generator = GeneratorLSTM(data_shape, latent_dim, internal_d, dropout=dropout)
+    discriminator = DiscriminatorLSTM(data_shape, internal_d, dropout=dropout)
 
     if cuda:
         print("INFO: Using cuda to train")
@@ -112,11 +166,9 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
                 optimizer_G.step()
                 if i % print_each_n == 0:
                     print(
-                        "\r[Epoch %d/%d] [Batch %d/%d] [D true loss: %f] [D fake loss: %f] [G loss: %f]"
-                        % (epoch+1, epochs, batches_done % len(dataloader_train), len(dataloader_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item()),
-                        end=""
+                        "[Epoch %d/%d] [Batch %d/%d] [D true loss: %f] [D fake loss: %f] [G loss: %f]"
+                        % (epoch+1, epochs, batches_done % len(dataloader_train), len(dataloader_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item())
                     )
-                    sys.stdout.flush()
                     if do_print and False:
                         print("fake: ", fake_data)
                         print("real: ", real_data)
@@ -125,16 +177,15 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
                         input()
             batches_done += 1
         end = time.time()
-        print()
         print(f"Epoch training time: {end-start:.3f} seconds")
-        if dataset_val is not None and y_val is not None:
+        if df_val is not None and y_val is not None:
             discriminator.eval()
             preds = discriminate(discriminator, dataset_val, time_window)
+            preds = np.mean(preds, axis=1)
+            preds = np.squeeze(preds)
             best_thresh = metrics.best_validation_threshold(y_val, preds)
             thresh = best_thresh["thresholds"]
             auc_score = roc_auc_score(y_val, preds)
-            if auc_score > best_auc_score:
-                best_auc_score = auc_score
             print("\nValidation accuracy: ", metrics.accuracy(y_val, preds > thresh))
             print("AUC score: ", auc_score, "\n")
             # Mecanismo de early stopping
@@ -146,41 +197,11 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
                     print(f"Total Training time: {end_all-start_all:.3f} seconds")
                     discriminator = torch.load('checkpoint.pt', weights_only = False)
                     generator = torch.load('checkpoint2.pt', weights_only = False)
-                    if return_auc:
-                        return generator, discriminator, best_auc_score
-                    else:
-                        return generator, discriminator
+                    return generator, discriminator
             discriminator.train()
         
     end_all = time.time()
     print(f"Total Training time: {end_all-start_all:.3f} seconds")
     discriminator = torch.load('checkpoint.pt', weights_only = False)
     generator = torch.load('checkpoint2.pt', weights_only = False)
-    if return_auc:
-        return generator, discriminator, best_auc_score
-    else:
-        return generator, discriminator
-
-@torch.no_grad
-def discriminate(discriminator: Discriminator, dataset_val: IntoDataset, time_window = 40, batch_size=400) -> list: 
-    dataloader_val = DataLoader(dataset_val, batch_size, shuffle=False)
-    
-    scores = []
-    i = 0
-    start = time.time()
-    for batch in dataloader_val:
-        data = batch.to(device)
-        # print(data.shape)
-        score = discriminator(data, do_print=False).cpu().detach().numpy()
-        if i%50 == 0:
-            print(f"\r[Validating] [Sample {i} / {len(dataloader_val)}] [Score {np.squeeze(np.mean(score[0]))}]", end="")
-            sys.stdout.flush()
-        i+=1
-        for s in score:
-            scores.append(-s)
-    end = time.time()
-    print()
-    print(f"Validation time: {end-start}")
-    if batch_size == 1:
-        print(f"Average detection time: {(end-start)/len(dataset_val)} seconds")
-    return scores
+    return generator, discriminator
