@@ -4,36 +4,36 @@
 
 ### Self Attention
 
-Dataset CIC-DDoS-2019
+#### Dataset CIC-DDoS-2019
 ```console
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 train sa
 ```
 
-Dataset CIC-IDS-2017
+#### Dataset CIC-IDS-2017
 ```console
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 train sa
 ```
 
 ### TCN
 
-Dataset CIC-DDoS-2019
+#### Dataset CIC-DDoS-2019
 ```console
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 train tcn
 ```
 
-Dataset CIC-IDS-2017
+#### Dataset CIC-IDS-2017
 ```console
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 train tcn
 ```
 
 ### LSTM
 
-Dataset CIC-DDoS-2019
+#### Dataset CIC-DDoS-2019
 ```console
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 train lstm
 ```
 
-Dataset CIC-IDS-2017
+#### Dataset CIC-IDS-2017
 ```console
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 train lstm
 ```
@@ -45,7 +45,7 @@ dependendo do que for escolhido. Outras métricas serão printadas no terminal.<
 
 ### Self Attention
 
-Dataset CIC-DDoS-2019
+#### Dataset CIC-DDoS-2019
 ##### Conjunto de validação
 ```console
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 val thresh both sa
@@ -55,7 +55,7 @@ python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 val thresh both
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 test thresh both sa
 ```
 
-Dataset CIC-IDS-2017
+#### Dataset CIC-IDS-2017
 ##### Conjunto de validação
 ```console
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 val thresh both sa
@@ -68,7 +68,7 @@ python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filte
 
 ### TCN
 
-Dataset CIC-DDoS-2019
+#### Dataset CIC-DDoS-2019
 ##### Conjunto de validação
 ```console
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 val thresh both tcn
@@ -78,7 +78,7 @@ python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 val thresh both
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 test thresh both tcn
 ```
 
-Dataset CIC-IDS-2017
+#### Dataset CIC-IDS-2017
 ##### Conjunto de validação
 ```console
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 val thresh both tcn
@@ -90,7 +90,7 @@ python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filte
 
 ### LSTM
 
-Dataset CIC-DDoS-2019
+#### Dataset CIC-DDoS-2019
 ##### Conjunto de validação
 ```console
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 val thresh both lstm
@@ -100,7 +100,7 @@ python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 val thresh both
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 test thresh both lstm
 ```
 
-Dataset CIC-IDS-2017
+#### Dataset CIC-IDS-2017
 ##### Conjunto de validação
 ```console
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 val thresh both lstm
@@ -113,13 +113,26 @@ python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filte
 ## Realizar tunagem de parâmetros
 
 ### Self Attention
+
+#### Dataset CIC-DDoS-2019
 ```console
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 tune sa
 ```
 
+#### Dataset CIC-IDS-2017
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 tune sa
+```
+
 ### TCN
+
+#### Dataset CIC-DDoS-2019
 ```console
 python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 optuna tcn
+```
+#### Dataset CIC-IDS-2017
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 optuna tcn
 ```
 
 ### LSTM
