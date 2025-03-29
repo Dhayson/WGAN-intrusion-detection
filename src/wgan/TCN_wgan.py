@@ -6,6 +6,7 @@ import torch
 import torch_optimizer
 from ipaddress import IPv4Address
 import random
+import time
 
 # Importa as funções do projeto
 from src.import_dataset import GetDataset
@@ -204,8 +205,22 @@ def TrainTCN(df_train: pd.DataFrame,
 def discriminate(discriminator: torch.nn.Module, dataset_val: IntoDataset, time_window=40, batch_size=400, device="cpu"):
     loader = torch.utils.data.DataLoader(dataset_val, batch_size=batch_size, shuffle=False)
     scores = []
+    start = time.time()
+    i = 0
     for batch in loader:
         batch = batch.to(device)
         out = discriminator(batch).cpu().numpy()
         scores.extend([-s for s in out])
+        if i%50 == 0:
+            print(f"\r[Validating] [Sample {i} / {len(loader)}] [Score {np.squeeze(np.mean(out[0]))}]", end="")
+            sys.stdout.flush()
+        i+=1
+
+    end = time.time()
+    
+    print(f"Validation time: {end-start}")
+    if batch_size == 1:
+        print(f"Average detection time: {(end-start)/len(dataset_val)} seconds")
+    
+    
     return scores

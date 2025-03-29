@@ -162,7 +162,7 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
         return generator, discriminator
 
 @torch.no_grad
-def discriminate(discriminator: Discriminator, dataset_val: IntoDataset, time_window = 40, batch_size=400) -> list: 
+def discriminate(discriminator: Discriminator, dataset_val: IntoDataset, time_window = 40, batch_size=400, lim=None) -> list: 
     dataloader_val = DataLoader(dataset_val, batch_size, shuffle=False)
     
     scores = []
@@ -178,9 +178,14 @@ def discriminate(discriminator: Discriminator, dataset_val: IntoDataset, time_wi
         i+=1
         for s in score:
             scores.append(-s)
+        if i == lim:
+            break
     end = time.time()
     print()
     print(f"Validation time: {end-start}")
     if batch_size == 1:
-        print(f"Average detection time: {(end-start)/len(dataset_val)} seconds")
+        if lim is not None:
+            print(f"Average detection time: {(end-start)/lim} seconds")
+        else:
+            print(f"Average detection time: {(end-start)/len(dataset_val)} seconds")
     return scores

@@ -137,6 +137,8 @@ def main():
         df_test = df_test.fillna(0)
         
         time_window = 80
+    elif args[-1] == "tcn":
+        time_window = 80
         
     if args[-1] == "linear":
         dataset_train = IntoDatasetNoTime(df_train, normalization)
@@ -330,7 +332,15 @@ def main():
                         y_x_i = y_x.loc[idxs]
                         preds_i = [preds[i] for i in idxs.tolist()]
                         print(f"{X} accuracy of {i}: ", metrics.accuracy(y_x_i, preds_i > thresh))
-                        
+        elif args[5] == "inference":
+            X = "Validation" if args[4] == "val" else "Test"
+            # Get predicitons of df_val
+            if args[-1] == "tcn":
+                preds = discriminateTCN(discriminator, dataset_x, time_window=40, batch_size=1)
+            elif args[-1] == "lstm":
+                preds = discriminate(discriminator, dataset_x, time_window, batch_size=1, lim=1000)
+            else:
+                preds = discriminate(discriminator, dataset_x, time_window, batch_size=1)
     elif len(args) > 4 and args[4] == "minmax":
         # Mapeando endereços ip para valores inteiros
         df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
