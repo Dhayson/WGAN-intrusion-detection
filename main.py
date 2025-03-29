@@ -127,12 +127,25 @@ def main():
         else:
             time_window = 80
     elif args[-1] == "lstm":
+        min_max = (train_max - train_min).to_numpy()
+        # Normalização
+        df_train = (df_train - df_train.min()) / (df_train.max() - df_train.min())
+        df_train = df_train.fillna(0)
+        df_val = (df_val - train_min) / (min_max)
+        df_val = df_val.fillna(0)
+        df_test = (df_test - train_min) / (min_max)
+        df_test = df_test.fillna(0)
+        
         time_window = 80
         
     if args[-1] == "linear":
         dataset_train = IntoDatasetNoTime(df_train, normalization)
         dataset_val = IntoDatasetNoTime(df_val, normalization)
         dataset_test = IntoDatasetNoTime(df_test, normalization)
+    elif args[-1] == "lstm":
+        dataset_train = IntoDataset(df_train, time_window)
+        dataset_val = IntoDataset(df_val, time_window)
+        dataset_test = IntoDataset(df_test, time_window)
     else:
         dataset_train = IntoDataset(df_train, time_window, normalization)
         dataset_val = IntoDataset(df_val, time_window, normalization)
@@ -269,6 +282,10 @@ def main():
             # Get predicitons of df_val
             if args[-1] == "tcn":
                 preds = discriminateTCN(discriminator, dataset_x, time_window=40)
+            elif args[-1] == "lstm":
+                preds = discriminate(discriminator, dataset_x, time_window)
+                preds = np.mean(preds, axis=1)
+                preds = np.squeeze(preds)
             else:
                 preds = discriminate(discriminator, dataset_x, time_window)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
