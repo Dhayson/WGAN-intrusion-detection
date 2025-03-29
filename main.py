@@ -19,12 +19,12 @@ import torch_optimizer
 from ipaddress import IPv4Address
 import random
 from src.early_stop import EarlyStopping
+from optuna.pruners import MedianPruner
 from src.into_dataloader import IntoDataset, IntoDatasetNoTime
 from src.transform import MeanNormalizeTensor, MinMaxNormalizeTensor
 
-# OBS: o dataset completo não cabe no repositório, mas pode ser baixado em http://205.174.165.80/CICDataset/CICDDoS2019/Dataset/CSVs/
 
-def DescartarDuplicatas(dataset: pd.DataFrame, do_print = False):
+def DescartarDuplicatas(dataset: pd.DataFrame, do_print=False):
     initial_len = dataset.shape[0]
     dataset = dataset.drop_duplicates()
     if do_print:
@@ -32,24 +32,24 @@ def DescartarDuplicatas(dataset: pd.DataFrame, do_print = False):
         print()
     return dataset
 
+
 def DebugTrainValTest(df_train, df_val, df_test, BENIGN):
     print()
     print(f"Tamanho do conjunto de treino: {df_train.__len__()} benignos")
     print(df_train['Label'].value_counts())
-    
     print()
     print(f'Tamanho do conjunto de validação: {df_val[df_val["Label"] == BENIGN].__len__()} benignos, {df_val[df_val["Label"] != BENIGN].__len__()} ataque')
     print(df_val['Label'].value_counts())
-    
     print()
     print(f'Tamanho do conjunto de teste: {df_test[df_test["Label"] == BENIGN].__len__()} benignos, {df_test[df_test["Label"] != BENIGN].__len__()} ataque')
     print(df_test['Label'].value_counts())
+
 
 def main():
     RANDOM_SEED = 5
     rs = RandomState(RANDOM_SEED)
     DATASET_FORMAT = "csv"
-    
+
     BENIGN = "BENIGN"
     if DATASET_FORMAT == "parquet":
         BENIGN = "Benign"
@@ -58,7 +58,7 @@ def main():
     dataset_kind = args[1]
     
     if args[1] == "2019":
-        # Nesse caso já está dividido entre treino e teste, isto é, entre o primeiro e o segundo dia
+        # Carrega os datasets (divididos entre dia 1 e dia 2)
         df_day_1 = GetDataset(args[2], rs, DATASET_FORMAT, filter=False, do_print=False)
         # Descartando duplicadas
         df_day_1 = DescartarDuplicatas(df_day_1, do_print=False)
@@ -83,28 +83,26 @@ def main():
     df_train_label = df_train["Label"]
     df_val_label = df_val["Label"]
     df_test_label = df_test["Label"]
-    
-    # Limpar dados
-    # Essas colunas geram dados de string ou não normalizáveis
+
+    # Remove as colunas que não serão usadas para treinamento
     df_train = df_train.drop(["Label"], axis=1)
     df_val = df_val.drop(["Label"], axis=1)
     df_test = df_test.drop(["Label"], axis=1)
     df_train = df_train.drop(["Timestamp"], axis=1)
     df_val = df_val.drop(["Timestamp"], axis=1)
     df_test = df_test.drop(["Timestamp"], axis=1)
-    
-    # Mapeando endereços ip para valores inteiros
+
+    # Mapeia endereços IP para inteiros
     df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
     df_val["Source IP"] = df_val["Source IP"].map(lambda x: int(IPv4Address(x)))
     df_test["Source IP"] = df_test["Source IP"].map(lambda x: int(IPv4Address(x)))
     df_train["Destination IP"] = df_train["Destination IP"].map(lambda x: int(IPv4Address(x)))
     df_val["Destination IP"] = df_val["Destination IP"].map(lambda x: int(IPv4Address(x)))
     df_test["Destination IP"] = df_test["Destination IP"].map(lambda x: int(IPv4Address(x)))
-    
-    
+
     cuda = True if torch.cuda.is_available() else False
     device = "cuda" if cuda else "cpu"
-    
+
     train_min = df_train.min().astype("float64")
     train_max = df_train.max().astype("float64")
     # min_max = (train_max - train_min).to_numpy()
@@ -118,17 +116,36 @@ def main():
     normalization = MinMaxNormalizeTensor(df_train.max().to_numpy(dtype=np.float32), df_train.min().to_numpy(dtype=np.float32))
         
     # Validação: diferenciar entre benignos (0) e ataques (1)
+
+    # Converte os rótulos para 0 (BENIGN) e 1 (ataque)
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
-    if args[1] == "2019":
-        time_window = 77
-    else:
+    if args[-1] == "sa":
+        if args[1] == "2019":
+            time_window = 77
+        else:
+            time_window = 80
+    elif args[-1] == "lstm":
+        min_max = (train_max - train_min).to_numpy()
+        # Normalização
+        df_train = (df_train - df_train.min()) / (df_train.max() - df_train.min())
+        df_train = df_train.fillna(0)
+        df_val = (df_val - train_min) / (min_max)
+        df_val = df_val.fillna(0)
+        df_test = (df_test - train_min) / (min_max)
+        df_test = df_test.fillna(0)
+        
         time_window = 80
+        
     if args[-1] == "linear":
         dataset_train = IntoDatasetNoTime(df_train, normalization)
         dataset_val = IntoDatasetNoTime(df_val, normalization)
         dataset_test = IntoDatasetNoTime(df_test, normalization)
+    elif args[-1] == "lstm":
+        dataset_train = IntoDataset(df_train, time_window)
+        dataset_val = IntoDataset(df_val, time_window)
+        dataset_test = IntoDataset(df_test, time_window)
     else:
         dataset_train = IntoDataset(df_train, time_window, normalization)
         dataset_val = IntoDataset(df_val, time_window, normalization)
@@ -146,9 +163,13 @@ def main():
                 print("Using CIC-IDS-2017")
                 RunModelSelfAttention2017(dataset_train, dataset_val, y_val)
         elif sys.argv[5] == "lstm":
-            generator, discriminator = TrainLSTM(df_train, 2e-4, 1e-4, 10, df_val, y_val, wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
-                early_stopping=EarlyStopping(15, 0), latent_dim=10, batch_size=64, n_critic=4, time_window=80,
-                internal_d=240, internal_g=240)
+            generator, discriminator = TrainLSTM(
+                df_train, 0.00010870300025198446, 0.00028247627584454017, 10, df_val, y_val,
+                wdd=2e-2, wdg=1e-2, optim=torch_optimizer.Yogi,
+                early_stopping=EarlyStopping(15, 0), latent_dim=10,
+                batch_size=128, n_critic=3, time_window=80,
+                internal_d=512, internal_g=512, clip_value=0.1, print_each_n=1
+            )
             torch.save(generator, "GeneratorLSTM.torch")
             torch.save(discriminator, "DiscriminatorLSTM.torch")
         elif sys.argv[5] == "tcn":
@@ -158,12 +179,57 @@ def main():
                 print("Using CIC-IDS-2017")
                 RunModelTCN2017()
     elif len(args) > 4 and args[4] == "optuna":
+        import optuna
         if sys.argv[5] == "tcn":
             if dataset_kind == "2019":
                 RunModelTCN2019()
             elif dataset_kind == "2017":
                 print("Using CIC-IDS-2017")
                 RunModelTCN2017()
+        elif sys.argv[5] == "lstm":
+            def objective(trial):
+                lrg = trial.suggest_loguniform("lrg", 1e-4, 1e-3)
+                lrd = trial.suggest_loguniform("lrd", 1e-4, 1e-3)
+                n_critic = trial.suggest_categorical("n_critic", [3, 4, 5, 7])
+                clip_value = trial.suggest_categorical("clip_value", [0.1, 0.5, 1.0])
+                latent_dim = trial.suggest_categorical("latent_dim", [10, 20, 30])
+                internal_dim = trial.suggest_categorical("internal_dim", [240, 400, 512])
+                dropout = trial.suggest_uniform("dropout", 0.1, 0.3)
+                batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
+                epochs = 60
+                generator, discriminator = TrainLSTM(
+                    df_train=df_train,
+                    lrd=lrd, lrg=lrg, epochs=epochs,
+                    df_val=df_val, y_val=y_val,
+                    n_critic=n_critic, clip_value=clip_value,
+                    latent_dim=latent_dim,
+                    optim=torch_optimizer.Yogi,
+                    wdd=1e-2, wdg=1e-2,
+                    early_stopping=EarlyStopping(patience=5, verbose=False),
+                    dropout=dropout,
+                    time_window=80,
+                    batch_size=batch_size,
+                    internal_d=internal_dim,
+                    internal_g=internal_dim,
+                    trial=trial
+                )
+                from src.into_dataloader import IntoDataset
+                dataset_val = IntoDataset(df_val, time_window=80)
+                preds = discriminate(discriminator, dataset_val, time_window=80, batch_size=400)
+                preds = np.mean(np.array(preds), axis=1)
+                auc = metrics.roc_auc_score(y_val, preds)
+                print(f"Trial AUC: {auc}")
+                return auc
+            study = optuna.create_study(
+                direction="maximize",
+                pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=3)
+            )
+            study.optimize(objective, n_trials=50)
+            print("Melhores hiperparâmetros:", study.best_trial.params)
+            print("Melhor AUC:", study.best_trial.value)
+        else:
+            print("A otimização para o modelo", sys.argv[5], "ainda não foi implementada.")
+
     elif len(args) > 4 and args[4] == "tune":
         if args[5] == "sa":
             if args[6] == "2layers":
@@ -185,6 +251,9 @@ def main():
         if args[-1] == "sa":
             discriminator: Discriminator = torch.load("DiscriminatorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
             generator: Generator = torch.load("GeneratorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
+        if args[-1] == "lstm":
+            discriminator: Discriminator = torch.load("DiscriminatorLSTM.torch", weights_only = False, map_location=torch.device(device)).to(device)
+            generator: Generator = torch.load("GeneratorLSTM.torch", weights_only = False, map_location=torch.device(device)).to(device)
         if args[-1] == "tcn":
             discriminator: Discriminator = torch.load("DiscriminatorTCN.torch", weights_only = False, map_location=torch.device(device)).to(device)
             generator: Generator = torch.load("GeneratorTCN.torch", weights_only = False, map_location=torch.device(device)).to(device)
@@ -213,6 +282,10 @@ def main():
             # Get predicitons of df_val
             if args[-1] == "tcn":
                 preds = discriminateTCN(discriminator, dataset_x, time_window=40)
+            elif args[-1] == "lstm":
+                preds = discriminate(discriminator, dataset_x, time_window)
+                preds = np.mean(preds, axis=1)
+                preds = np.squeeze(preds)
             else:
                 preds = discriminate(discriminator, dataset_x, time_window)
             best_thresh = metrics.best_validation_threshold(y_x, preds)
@@ -262,10 +335,10 @@ def main():
         # Mapeando endereços ip para valores inteiros
         df_train["Source IP"] = df_train["Source IP"].map(lambda x: int(IPv4Address(x)))
         df_train["Destination IP"] = df_train["Destination IP"].map(lambda x: int(IPv4Address(x)))
-        
         print(df_train.min())
         print()
         print(df_train.max())
-    
+        
+
 if __name__ == '__main__':
     main()

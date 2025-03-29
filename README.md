@@ -136,5 +136,13 @@ python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filte
 ```
 
 ### LSTM
-TODO
+
+#### Dataset CIC-DDoS-2019
+```console
+python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 optuna lstm
+```
+#### Dataset CIC-IDS-2017
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 optuna lstm
+```
 

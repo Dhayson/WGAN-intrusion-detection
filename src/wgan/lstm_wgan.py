@@ -4,6 +4,7 @@ import numpy as np
 
 import torch.nn as nn
 import torch
+import optuna
 
 from src.early_stop import EarlyStopping
 
@@ -76,7 +77,7 @@ class DiscriminatorLSTM(nn.Module):
     
 def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
-    print_each_n = 100, time_window = 40, batch_size=5, do_print = False, step_by_step = False, internal_d=400, internal_g=400
+    print_each_n = 100, time_window = 40, batch_size=5, do_print = False, step_by_step = False, internal_d=400, internal_g=400, trial = None
     ) -> tuple[GeneratorLSTM, DiscriminatorLSTM]:
     dataset_train = IntoDataset(df_train, time_window)
     dataset_val = IntoDataset(df_val, time_window)
@@ -166,8 +167,9 @@ def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = N
                 optimizer_G.step()
                 if i % print_each_n == 0:
                     print(
-                        "[Epoch %d/%d] [Batch %d/%d] [D true loss: %f] [D fake loss: %f] [G loss: %f]"
-                        % (epoch+1, epochs, batches_done % len(dataloader_train), len(dataloader_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item())
+                        "\r[Epoch %d/%d] [Batch %d/%d] [D true loss: %f] [D fake loss: %f] [G loss: %f]"
+                        % (epoch+1, epochs, batches_done % len(dataloader_train), len(dataloader_train), loss_D_true.item(), loss_D_fake.item(), loss_G.item()),
+                        end=""
                     )
                     if do_print and False:
                         print("fake: ", fake_data)
@@ -177,6 +179,7 @@ def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = N
                         input()
             batches_done += 1
         end = time.time()
+        print()
         print(f"Epoch training time: {end-start:.3f} seconds")
         if df_val is not None and y_val is not None:
             discriminator.eval()
@@ -189,6 +192,11 @@ def TrainLSTM(df_train: pd.DataFrame, lrd, lrg, epochs, df_val: pd.DataFrame = N
             print("\nValidation accuracy: ", metrics.accuracy(y_val, preds > thresh))
             print("AUC score: ", auc_score, "\n")
             # Mecanismo de early stopping
+            if trial is not None:
+                trial.report(auc_score, epoch)
+                if trial.should_prune():
+                    raise optuna.TrialPruned()
+                
             if early_stopping is not None:
                 early_stopping(auc_score, discriminator, generator)
                 if early_stopping.early_stop:
