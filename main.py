@@ -234,11 +234,7 @@ def main():
 
     elif len(args) > 4 and args[4] == "tune":
         if args[5] == "sa":
-            if args[6] == "2layers":
-                print("Using 2 self attention blocks")
-                TuneSA(df_train, df_val, y_val, sa_layers=2)
-            else:
-                TuneSA(df_train, df_val, y_val)
+            TuneSA(df_train, df_val, y_val)
     elif len(args) > 4 and (args[4] == "val" or args[4] == "test"):
         if args[4] == "val":
             df_x = df_val
