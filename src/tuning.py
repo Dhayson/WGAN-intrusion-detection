@@ -41,6 +41,8 @@ def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series, sa_la
         # embedg: dimensão das entradas do gerador. NOTA: embedg / headsg deve ser inteiro
         headsg = trial.suggest_int("headsg", 20, 28, step=2)
         embedg = headsg*trial.suggest_int("embedg_factor", 1, 3)
+        # lambda_penalty: influência da penalização no cálculo da loss do discriminador
+        lambda_penalty = trial.suggest_float("lambda_penalty", 0.01, 0.1)
         # normalização: preprocessamento do dataset
         normalization = MeanNormalizeTensor(df_train.mean().to_numpy(dtype=np.float32), df_train.std().to_numpy(dtype=np.float32))
         #
@@ -64,7 +66,7 @@ def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series, sa_la
         
         _, _, auc_score = TrainSelfAttention(dataset_train, lrd, lrg, epochs, dataset_val, y_val,
             n_critic, clip_value, latent_dim, optim, wdd, wdg, early_stopping, dropout, 500,
-            time_window, batch_size, headsd, embedd, headsg, embedg, data_len, return_auc=True, sa_layers = sa_layers)
+            time_window, batch_size, headsd, embedd, headsg, embedg, data_len, return_auc=True, sa_layers = sa_layers, lambda_penalty=lambda_penalty)
         
         print(f"Trial: {trial.number} finished with auc score {auc_score}")
         print(f"Parameters: lrd:{lrd}, lrg:{lrg}, n_critic:{n_critic}, clip_value:{clip_value}")
