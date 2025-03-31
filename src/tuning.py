@@ -42,7 +42,7 @@ def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series, sa_la
         headsg = trial.suggest_int("headsg", 20, 28, step=2)
         embedg = headsg*trial.suggest_int("embedg_factor", 1, 3)
         # lambda_penalty: influência da penalização no cálculo da loss do discriminador
-        lambda_penalty = trial.suggest_float("lambda_penalty", 0.01, 0.1)
+        lambda_penalty = trial.suggest_float("lambda_penalty", 0.001, 0.2)
         # normalização: preprocessamento do dataset
         normalization = MeanNormalizeTensor(df_train.mean().to_numpy(dtype=np.float32), df_train.std().to_numpy(dtype=np.float32))
         #
@@ -61,7 +61,7 @@ def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series, sa_la
         print(f"Parameters: lrd:{lrd}, lrg:{lrg}, n_critic:{n_critic}, clip_value:{clip_value}")
         print(f"latent_dim:{latent_dim}, optim:{optim}, wdd:{wdd}, wdg:{wdg}, dropout:{dropout}")
         print(f"time_window:{time_window}, batch_size:{batch_size}, headsd:{headsd}, embedd:{embedd}")
-        print(f"headsg:{headsg}, embedg:{embedg}")
+        print(f"headsg:{headsg}, embedg:{embedg}, lambda_penalty:{lambda_penalty}")
         print()
         
         _, _, auc_score = TrainSelfAttention(dataset_train, lrd, lrg, epochs, dataset_val, y_val,
@@ -72,7 +72,7 @@ def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series, sa_la
         print(f"Parameters: lrd:{lrd}, lrg:{lrg}, n_critic:{n_critic}, clip_value:{clip_value}")
         print(f"latent_dim:{latent_dim}, optim:{optim}, wdd:{wdd}, wdg:{wdg}, dropout:{dropout}")
         print(f"time_window:{time_window}, batch_size:{batch_size}, headsd:{headsd}, embedd:{embedd}")
-        print(f"headsg:{headsg}, embedg:{embedg}")
+        print(f"headsg:{headsg}, embedg:{embedg}, lambda_penalty:{lambda_penalty}")
         print()
         return auc_score
     study = optuna.create_study(direction="maximize")
