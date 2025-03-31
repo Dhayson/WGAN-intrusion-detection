@@ -89,9 +89,11 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
             # ---------------------
 
             optimizer_D.zero_grad()
-
             # Sample noise as generator input
-            z = torch.tensor(np.random.normal(0, 1, (batch_size, time_window, latent_dim)), device=device, dtype=torch.float32)
+            if (real_data.shape[0] < batch_size):
+                z = torch.tensor(np.random.normal(0, 1, (real_data.shape[0], time_window, latent_dim)), device=device, dtype=torch.float32)
+            else:
+                z = torch.tensor(np.random.normal(0, 1, (batch_size, time_window, latent_dim)), device=device, dtype=torch.float32)
             # print("latent shape", z.shape)
 
             # Generate a batch of images

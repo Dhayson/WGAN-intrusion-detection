@@ -139,6 +139,8 @@ def main():
         time_window = 80
     elif args[-1] == "tcn":
         time_window = 80
+    else:
+        time_window = 77
         
     if args[-1] == "linear":
         dataset_train = IntoDatasetNoTime(df_train, normalization)
