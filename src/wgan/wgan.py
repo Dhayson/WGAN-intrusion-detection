@@ -24,6 +24,8 @@ def gradient_penalty(real, fake, discriminator):
 
     # interpolação por meio do discriminador
     interpolated_data = real*epsilon + (1 - epsilon)*fake
+    interpolated_data.requires_grad_(True)
+    
     interpolated_scores = discriminator(interpolated_data)
 
     # cálculo do gradiente
