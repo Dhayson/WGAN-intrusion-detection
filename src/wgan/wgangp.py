@@ -98,7 +98,7 @@ class TCNDiscriminator(torch.nn.Module):
 
 # ------------------------------------------------------------
 # Função de treinamento para TCN-based WGAN-GP
-def TrainTCN(df_train: pd.DataFrame,
+def TrainTCNGP(df_train: pd.DataFrame,
              latent_dim, output_dim, input_dim,
              lrd, lrg, epochs,
              dataset_val: pd.DataFrame = None,

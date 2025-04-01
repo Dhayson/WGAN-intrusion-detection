@@ -4,8 +4,8 @@ from src.dataset_split import SplitDataset
 from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 from src.wgan.lstm_wgan import TrainLSTM
 from src.wgan.linear_wgan import TrainLinear
-from src.wgan.self_attention_wgan import RunModelSelfAttention2019, RunModelSelfAttention2017
-from src.wgan.TCN_train import RunModelTCN2019, RunModelTCN2017, RunModelSelfAttentionGP2019, RunModelSelfAttentionGP2017
+from src.wgan.self_attention_wgan import RunModelSelfAttention2019, RunModelSelfAttention2017, RunModelSelfAttentionGP2019, RunModelSelfAttentionGP2017
+from src.wgan.TCN_train import RunModelTCN2019, RunModelTCN2017, RunModelTCNGP2019, RunModelTCNGP2017
 from src.tuning import TuneSA, TuneWganGPSA
 from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 from src.wgan.TCN_wgan import discriminate as discriminateTCN
@@ -121,7 +121,7 @@ def main():
     y_val = df_val_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     y_test = df_test_label.apply(lambda c: 0 if c == 'BENIGN' else 1)
     
-    if args[-1] == "sa":
+    if args[-1] == "sa" or args[-1] == "sa-gp":
         if args[1] == "2019":
             time_window = 77
         else:
@@ -154,6 +154,7 @@ def main():
         dataset_train = IntoDataset(df_train, time_window, normalization)
         dataset_val = IntoDataset(df_val, time_window, normalization)
         dataset_test = IntoDataset(df_test, time_window, normalization)
+
     if len(args) > 4 and args[4] == "train":
         if args[5] == "linear":
             generator, discriminator = TrainLinear(dataset_train, 2e-5, 3e-5, 10, dataset_val, y_val,
@@ -188,6 +189,12 @@ def main():
             elif dataset_kind == "2017":
                 print("Using CIC-IDS-2017")
                 RunModelTCN2017()
+        elif sys.argv[5] == "tcn-gp":
+            if dataset_kind == "2019":
+                RunModelTCNGP2019()
+            elif dataset_kind == "2017":
+                print("Using CIC-IDS-2017")
+                RunModelTCNGP2017()
     elif len(args) > 4 and args[4] == "optuna":
         import optuna
         if sys.argv[5] == "tcn":
@@ -196,6 +203,12 @@ def main():
             elif dataset_kind == "2017":
                 print("Using CIC-IDS-2017")
                 RunModelTCN2017()
+        elif sys.argv[5] == "tcn-gp":
+            if dataset_kind == "2019":
+                RunModelTCNGP2019()
+            elif dataset_kind == "2017":
+                print("Using CIC-IDS-2017")
+                RunModelTCNGP2017()
         elif sys.argv[5] == "lstm":
             def objective(trial):
                 lrg = trial.suggest_loguniform("lrg", 1e-4, 1e-3)
@@ -262,7 +275,7 @@ def main():
         if args[-1] == "lstm":
             discriminator: Discriminator = torch.load("DiscriminatorLSTM.torch", weights_only = False, map_location=torch.device(device)).to(device)
             generator: Generator = torch.load("GeneratorLSTM.torch", weights_only = False, map_location=torch.device(device)).to(device)
-        if args[-1] == "tcn":
+        if args[-1] == "tcn" or args[-1] == "tcn-gp":
             discriminator: Discriminator = torch.load("DiscriminatorTCN.torch", weights_only = False, map_location=torch.device(device)).to(device)
             generator: Generator = torch.load("GeneratorTCN.torch", weights_only = False, map_location=torch.device(device)).to(device)
         elif args[-1] == "linear":

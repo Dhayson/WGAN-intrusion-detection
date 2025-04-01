@@ -38,6 +38,18 @@ python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 train tcn
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 train tcn
 ```
 
+### TCN + WGAN-GP
+
+#### Dataset CIC-DDoS-2019
+```console
+python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 train tcn-gp
+```
+
+#### Dataset CIC-IDS-2017
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 train tcn-gp
+```
+
 ### LSTM
 
 #### Dataset CIC-DDoS-2019
@@ -122,6 +134,28 @@ python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filte
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 test thresh both tcn
 ```
 
+### TCN + WGAN-GP
+
+#### Dataset CIC-DDoS-2019
+##### Conjunto de validação
+```console
+python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 val thresh both tcn-gp
+```
+##### Conjunto de teste
+```console
+python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 test thresh both tcn-gp
+```
+
+#### Dataset CIC-IDS-2017
+##### Conjunto de validação
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 val thresh both tcn-gp
+```
+##### Conjunto de teste
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 test thresh both tcn-gp
+```
+
 ### LSTM
 
 #### Dataset CIC-DDoS-2019
@@ -179,6 +213,17 @@ python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 optuna tcn
 #### Dataset CIC-IDS-2017
 ```console
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 optuna tcn
+```
+
+### TCN + WGAN-GP
+
+#### Dataset CIC-DDoS-2019
+```console
+python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 optuna tcn-gp
+```
+#### Dataset CIC-IDS-2017
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 optuna tcn-gp
 ```
 
 ### LSTM

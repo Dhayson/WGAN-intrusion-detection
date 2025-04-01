@@ -132,7 +132,7 @@ class TCNDiscriminator(torch.nn.Module):
 
 # ------------------------------------------------------------
 # Função de treinamento para TCN-based WGAN-GP
-def TrainTCN(df_train: pd.DataFrame,
+def TrainTCNGP(df_train: pd.DataFrame,
              latent_dim, output_dim, input_dim,
              lrd, lrg, epochs,
              dataset_val: pd.DataFrame = None,
@@ -271,7 +271,7 @@ def discriminate(discriminator: torch.nn.Module, dataset_val: torch.utils.data.D
 
 # ------------------------------------------------------------
 # Função principal para execução (modo train ou optuna)
-def RunModelTCN2019():
+def RunModelTCNGP2019():
     print("Iniciando main...")
     if len(sys.argv) < 6:
         print("Uso: python main.py <year> <path_day1> <path_day2> <mode: train/optuna> <model_type: tcn>")
@@ -441,7 +441,8 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-def RunModelTCN2017():
+
+def RunModelTCNGP2017():
     if len(sys.argv) != 6:
         print("Uso: python TCN_train_new.py <monday.csv> <wednesday.csv> <friday.csv> <mode: train/val/test/optuna> <model_type: tcn>")
         sys.exit(1)
