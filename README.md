@@ -14,6 +14,18 @@ python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 train sa
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 train sa
 ```
 
+### Self Attention + WGAN-GP
+
+#### Dataset CIC-DDoS-2019
+```console
+python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 train sa-gp
+```
+
+#### Dataset CIC-IDS-2017
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 train sa-gp
+```
+
 ### TCN
 
 #### Dataset CIC-DDoS-2019
@@ -63,6 +75,28 @@ python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filte
 ##### Conjunto de teste
 ```console
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 test thresh both sa
+```
+
+### Self Attention + WGAN-GP
+
+#### Dataset CIC-DDoS-2019
+##### Conjunto de validação
+```console
+python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 val thresh both sa-gp
+```
+##### Conjunto de teste
+```console
+python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 test thresh both sa-gp
+```
+
+#### Dataset CIC-IDS-2017
+##### Conjunto de validação
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 val thresh both sa-gp
+```
+##### Conjunto de teste
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 test thresh both sa-gp
 ```
 
 
@@ -122,6 +156,18 @@ python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 tune sa
 #### Dataset CIC-IDS-2017
 ```console
 python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 tune sa
+```
+
+### Self Attention + WGAN-GP
+
+#### Dataset CIC-DDoS-2019
+```console
+python3 main.py 2019 dataset_filtered/Day1 dataset_filtered/Day2 tune sa-gp
+```
+
+#### Dataset CIC-IDS-2017
+```console
+python3 main.py 2017 dataset_alternative_filtered/Day1 dataset_alternative_filtered/Day3 dataset_alternative_filtered/Day5 tune sa-gp
 ```
 
 ### TCN

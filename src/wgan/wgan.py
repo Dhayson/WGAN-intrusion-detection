@@ -18,6 +18,31 @@ from src.lstm import LSTM
 cuda = True if torch.cuda.is_available() else False
 device = "cuda" if cuda else "cpu"
 
+def gradient_penalty(real, fake, discriminator):
+    # epsilon serve para calcular a interpolação entre os dados reais e falsos
+    epsilon = torch.rand(real.shape).to(device)
+
+    # interpolação por meio do discriminador
+    interpolated_data = real*epsilon + (1 - epsilon)*fake
+    interpolated_data.requires_grad_(True)
+    
+    interpolated_scores = discriminator(interpolated_data)
+
+    # cálculo do gradiente
+    gradient = torch.autograd.grad(
+        inputs = interpolated_data,
+        outputs = interpolated_scores,
+        grad_outputs = torch.ones_like(interpolated_scores),
+        create_graph = True,
+        retain_graph = True
+    )[0]
+
+    gradient = gradient.view(len(gradient), -1)
+    gradient_norm = gradient.norm(2, dim=1)
+    gradient_penalty = torch.mean((gradient_norm - 1)**2)
+    
+    return gradient_penalty
+
 class Generator(nn.Module):
     def __init__(self, *args, **kwargs):
         super(Generator, self).__init__()
@@ -28,7 +53,7 @@ class Discriminator(nn.Module):
 
 def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: Discriminator, lrd, lrg, epochs, dataset_val: IntoDataset = None, y_val: pd.Series = None, n_critic = 5, 
     clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
-    print_each_n = 20, time_window = 40, batch_size=5, do_print = False, step_by_step = False, return_auc = False) -> tuple[Generator, Discriminator]:
+    print_each_n = 20, time_window = 40, batch_size=5, do_print = False, step_by_step = False, return_auc = False, lambda_penalty = 0.05) -> tuple[Generator, Discriminator]:
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
     best_auc_score = 0;
@@ -64,9 +89,11 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
             # ---------------------
 
             optimizer_D.zero_grad()
-
             # Sample noise as generator input
-            z = torch.tensor(np.random.normal(0, 1, (batch_size, time_window, latent_dim)), device=device, dtype=torch.float32)
+            if (real_data.shape[0] < batch_size):
+                z = torch.tensor(np.random.normal(0, 1, (real_data.shape[0], time_window, latent_dim)), device=device, dtype=torch.float32)
+            else:
+                z = torch.tensor(np.random.normal(0, 1, (batch_size, time_window, latent_dim)), device=device, dtype=torch.float32)
             # print("latent shape", z.shape)
 
             # Generate a batch of images
@@ -91,6 +118,11 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
             # Clip weights of discriminator
             for p in discriminator.parameters():
                 p.data.clamp_(-clip_value, clip_value)
+            
+            # Gradient penalty
+            if lambda_penalty is not None:
+                penalty = gradient_penalty(real_data, fake_data, discriminator)
+                loss_D += penalty * lambda_penalty
 
             # Train the generator every n_critic iterations
             i += 1
