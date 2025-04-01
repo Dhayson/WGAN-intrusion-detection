@@ -91,7 +91,7 @@ def TuneWganGPSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series,
         # n_critic: em 1/n das vezes o gerador treina
         n_critic = trial.suggest_int("n_critic", 4, 8)
         # clip_value: limite dos valores nos pesos, definindo a convergência da wgan
-        clip_value = trial.suggest_float("clip_value", 0.5, 0.7)
+        clip_value = None
         # latent_dim: dimensão do espaço latente
         latent_dim = trial.suggest_int("latent_dim", 8, 15)
         # optim: algoritmo de otimização de aprendizado

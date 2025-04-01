@@ -172,26 +172,26 @@ def TrainSelfAttentionGP(dataset_train: IntoDataset, lrd, lrg, epochs, dataset_v
     return WganTrain(dataset_train, generator, discriminator, lrd, lrg, epochs, dataset_val, y_val, n_critic, clip_value, latent_dim, optim,
               wdd, wdg, early_stopping, dropout, print_each_n, time_window, batch_size, return_auc=return_auc, lambda_penalty=lambda_penalty)
 
-# Parameters: lrd:0.0013172236999405948, lrg:0.00042730691645367566, n_critic:6, clip_value: 0.525001342151131
+# Parameters: lrd:0.0013172236999405948, lrg:0.00042730691645367566, n_critic:6, clip_value: None
 # latent_dim:10, optim:<class 'torch.optim.Adam'>, wdd:0.001139442745846273, wdg:0.008386851859453001, dropout:0.15836459213389872
 # time_window:79, batch_size:4, headsd:56, embedd:112
 # headsg:22, embedg:44, lambda_penalty0.07531231424904279
 def RunModelSelfAttentionGP2019(dataset_train: IntoDataset, dataset_val: IntoDataset, y_val):
     generator_sa, discriminator_sa = TrainSelfAttentionGP(dataset_train, lrd=0.0013172236999405948, lrg=0.00042730691645367566, epochs=50, 
-                dataset_val=dataset_val, y_val=y_val, wdd=0.001139442745846273, wdg=0.008386851859453001, clip_value = 0.525001342151131, optim=torch.optim.Adam,
+                dataset_val=dataset_val, y_val=y_val, wdd=0.001139442745846273, wdg=0.008386851859453001, clip_value = None, optim=torch.optim.Adam,
                 early_stopping=EarlyStopping(15, 0), dropout=0.15836459213389872, latent_dim=10, batch_size=4, n_critic=6,
                 time_window=79, headsd=56, embedd=112, headsg=22, embedg=44, lambda_penalty=0.07531231424904279)
     torch.save(generator_sa, "GeneratorSA.torch")
     torch.save(discriminator_sa, "DiscriminatorSA.torch")
     
 
-# Parameters: lrd:0.001512703094318173, lrg:0.00020080466161518008, n_critic:7, clip_value:0.5442203304851734
+# Parameters: lrd:0.001512703094318173, lrg:0.00020080466161518008, n_critic:7, clip_value: None
 # latent_dim:8, optim:<class 'torch.optim.Adam'>, wdd:0.0019392946765071106, wdg:0.009197830177494612, dropout:0.2986744001633296
 # time_window:60, batch_size:6, headsd:72, embedd:144
 # headsg:26, embedg:78, lambda_penalty:0.0765723290179939
 def RunModelSelfAttentionGP2017(dataset_train: IntoDataset, dataset_val: IntoDataset, y_val):
     generator_sa, discriminator_sa = TrainSelfAttentionGP(dataset_train, lrd=0.001512703094318173, lrg=0.00020080466161518008, epochs=50, 
-                dataset_val=dataset_val, y_val=y_val, wdd=0.0019392946765071106, wdg=0.009197830177494612, clip_value = 0.5442203304851734, optim=torch.optim.Adam,
+                dataset_val=dataset_val, y_val=y_val, wdd=0.0019392946765071106, wdg=0.009197830177494612, clip_value = None, optim=torch.optim.Adam,
                 early_stopping=EarlyStopping(15, 0), dropout=0.2986744001633296, latent_dim=8, batch_size=6, n_critic=7,
                 time_window=60, headsd=72, embedd=144, headsg=26, embedg=78, lambda_penalty=0.0765723290179939)
     torch.save(generator_sa, "GeneratorSA.torch")
