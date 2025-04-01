@@ -5,8 +5,8 @@ from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 from src.wgan.lstm_wgan import TrainLSTM
 from src.wgan.linear_wgan import TrainLinear
 from src.wgan.self_attention_wgan import RunModelSelfAttention2019, RunModelSelfAttention2017
-from src.wgan.TCN_train import RunModelTCN2019, RunModelTCN2017
-from src.tuning import TuneSA
+from src.wgan.TCN_train import RunModelTCN2019, RunModelTCN2017, RunModelSelfAttentionGP2019, RunModelSelfAttentionGP2017
+from src.tuning import TuneSA, TuneWganGPSA
 from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 from src.wgan.TCN_wgan import discriminate as discriminateTCN
 import src.metrics as metrics
@@ -166,6 +166,12 @@ def main():
             elif dataset_kind == "2017":
                 print("Using CIC-IDS-2017")
                 RunModelSelfAttention2017(dataset_train, dataset_val, y_val)
+        elif args[5] == "sa-gp":
+            if dataset_kind == "2019":
+                RunModelSelfAttentionGP2019(dataset_train, dataset_val, y_val)
+            elif dataset_kind == "2017":
+                print("Using CIC-IDS-2017")
+                RunModelSelfAttentionGP2017(dataset_train, dataset_val, y_val)
         elif sys.argv[5] == "lstm":
             generator, discriminator = TrainLSTM(
                 df_train, 0.00010870300025198446, 0.00028247627584454017, 10, df_val, y_val,
@@ -237,6 +243,8 @@ def main():
     elif len(args) > 4 and args[4] == "tune":
         if args[5] == "sa":
             TuneSA(df_train, df_val, y_val)
+        elif args[5] == "sa-gp":
+            TuneWganGPSA(df_train, df_val, y_val)
     elif len(args) > 4 and (args[4] == "val" or args[4] == "test"):
         if args[4] == "val":
             df_x = df_val
@@ -248,7 +256,7 @@ def main():
             dataset_x = dataset_test
             df_x_label: pd.Series = df_test_label
             y_x = y_test
-        if args[-1] == "sa":
+        if args[-1] == "sa" or args[-1] == "sa-gp":
             discriminator: Discriminator = torch.load("DiscriminatorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
             generator: Generator = torch.load("GeneratorSA.torch", weights_only = False, map_location=torch.device(device)).to(device)
         if args[-1] == "lstm":

@@ -120,8 +120,9 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
                 p.data.clamp_(-clip_value, clip_value)
             
             # Gradient penalty
-            penalty = gradient_penalty(real_data, fake_data, discriminator)
-            loss_D += penalty * lambda_penalty
+            if lambda_penalty is not None:
+                penalty = gradient_penalty(real_data, fake_data, discriminator)
+                loss_D += penalty * lambda_penalty
 
             # Train the generator every n_critic iterations
             i += 1
