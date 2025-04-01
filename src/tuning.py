@@ -5,7 +5,7 @@ import torch_optimizer
 import optuna
 from src.early_stop import EarlyStopping
 from src.into_dataloader import IntoDataset
-from src.wgan.self_attention_wgan import TrainSelfAttention
+from src.wgan.self_attention_wgan import TrainSelfAttentionGP
 from src.transform import MeanNormalizeTensor, MinMaxNormalizeTensor
 
 def TuneSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series, sa_layers = 1):
@@ -137,7 +137,7 @@ def TuneWganGPSA(df_train: pd.DataFrame, df_val: pd.DataFrame, y_val: pd.Series,
         print(f"headsg:{headsg}, embedg:{embedg}, lambda_penalty:{lambda_penalty}")
         print()
         
-        _, _, auc_score = TrainSelfAttention(dataset_train, lrd, lrg, epochs, dataset_val, y_val,
+        _, _, auc_score = TrainSelfAttentionGP(dataset_train, lrd, lrg, epochs, dataset_val, y_val,
             n_critic, clip_value, latent_dim, optim, wdd, wdg, early_stopping, dropout, 500,
             time_window, batch_size, headsd, embedd, headsg, embedg, data_len, return_auc=True, sa_layers = sa_layers, lambda_penalty=lambda_penalty)
         

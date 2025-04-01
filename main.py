@@ -5,7 +5,8 @@ from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 from src.wgan.lstm_wgan import TrainLSTM
 from src.wgan.linear_wgan import TrainLinear
 from src.wgan.self_attention_wgan import RunModelSelfAttention2019, RunModelSelfAttention2017, RunModelSelfAttentionGP2019, RunModelSelfAttentionGP2017
-from src.wgan.TCN_train import RunModelTCN2019, RunModelTCN2017, RunModelTCNGP2019, RunModelTCNGP2017
+from src.wgan.TCN_train import RunModelTCN2019, RunModelTCN2017
+from src.wgan.TCN_train_wgangp import RunModelTCNGP2019, RunModelTCNGP2017
 from src.tuning import TuneSA, TuneWganGPSA
 from src.wgan.wgan import discriminate, Discriminator, Generator, cuda
 from src.wgan.TCN_wgan import discriminate as discriminateTCN
@@ -124,8 +125,12 @@ def main():
     if args[-1] == "sa" or args[-1] == "sa-gp":
         if args[1] == "2019":
             time_window = 77
+            if args[-1] == "sa-gp":
+                time_window = 79
         else:
             time_window = 80
+            if args[-1] == "sa-gp":
+                time_window = 60
     elif args[-1] == "lstm":
         min_max = (train_max - train_min).to_numpy()
         # Normalização

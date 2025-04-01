@@ -52,7 +52,7 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
 def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: Discriminator, lrd, lrg, epochs, dataset_val: IntoDataset = None, y_val: pd.Series = None, n_critic = 5, 
-    clip_value = 1, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
+    clip_value = None, latent_dim = 30, optim = torch.optim.RMSprop, wdd = 1e-2, wdg = 1e-2, early_stopping: EarlyStopping = None, dropout=0.2,
     print_each_n = 20, time_window = 40, batch_size=5, do_print = False, step_by_step = False, return_auc = False, lambda_penalty = 0.05) -> tuple[Generator, Discriminator]:
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     
@@ -116,8 +116,9 @@ def WganTrain(dataset_train: IntoDataset, generator: Generator, discriminator: D
             optimizer_D.step()
 
             # Clip weights of discriminator
-            for p in discriminator.parameters():
-                p.data.clamp_(-clip_value, clip_value)
+            if clip_value is not None:
+                for p in discriminator.parameters():
+                    p.data.clamp_(-clip_value, clip_value)
             
             # Gradient penalty
             if lambda_penalty is not None:
