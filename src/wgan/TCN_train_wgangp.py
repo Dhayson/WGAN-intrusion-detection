@@ -319,7 +319,7 @@ def RunModelTCNGP2019():
     output_dim = df_train.shape[1]
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
-    if mode == "train" and model_type == "tcn":
+    if mode == "train" and model_type == "tcn-gp":
         print("Entrando no modo de treinamento TCN com WGAN-GP...")
         latent_dim = 10
         num_channels = 64
@@ -352,7 +352,7 @@ def RunModelTCNGP2019():
         torch.save(generator, "GeneratorTCN.torch")
         torch.save(discriminator, "DiscriminatorTCN.torch")
     
-    elif mode == "optuna" and model_type == "tcn":
+    elif mode == "optuna" and model_type == "tcn-gp":
         print("Entrando no modo de otimização com Optuna para TCN...")
         def objective(trial):
             global TimeWindowDataset  # Garante que a classe esteja acessível
@@ -427,7 +427,7 @@ def RunModelTCNGP2019():
         torch.save(disc, "DiscriminatorTCN.torch")
     
     else:
-        print("Modo inválido. Use 'train tcn' ou 'optuna tcn'.")
+        print("Modo inválido. Use 'train tcn-gp' ou 'optuna tcn-gp'.")
 # ============================================================
 # Função para definir a seed e garantir replicabilidade
 def set_seed(seed):
@@ -521,7 +521,7 @@ def RunModelTCNGP2017():
     # Para cálculo de métricas, os rótulos de janela usam o rótulo da última linha
     y_val_window = lbl_val.iloc[:].apply(lambda c: 0 if c.strip().upper()=="BENIGN" else 1).to_numpy()
     
-    if mode == "train" and model_type == "tcn":
+    if mode == "train" and model_type == "tcn-gp":
         print("Entrando no modo de treinamento TCN com WGAN-GP...")
         latent_dim = 19
         batch_size = 16
@@ -551,7 +551,7 @@ def RunModelTCNGP2017():
         torch.save(generator, "GeneratorTCN.torch")
         torch.save(discriminator, "DiscriminatorTCN.torch")
     
-    elif mode == "optuna" and model_type=="tcn":
+    elif mode == "optuna" and model_type=="tcn-gp":
         print("Entrando no modo de otimização com Optuna para TCN com WGAN-GP...")
         def objective(trial):
             set_seed(RANDOM_SEED)
@@ -630,4 +630,4 @@ def RunModelTCNGP2017():
         torch.save(disc, "DiscriminatorTCN.torch")
     
     else:
-        print("Modo inválido. Use 'train', 'optuna', 'val' ou 'test' com 'tcn'.")
+        print("Modo inválido. Use 'train', 'optuna', 'val' ou 'test' com 'tcn-gp'.")
